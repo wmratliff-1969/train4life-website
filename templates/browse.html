@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Browse — TRAIN4LIFE{% endblock %}
+
+{% block content %}
+
+<!-- ===== SEARCH BAR ===== -->
+<form class="search-bar" method="GET" action="/browse">
+  <input
+    type="text"
+    name="q"
+    value="{{ query }}"
+    placeholder="Search videos, series, programs..."
+    autocomplete="off"
+  >
+  <button type="submit">Search</button>
+</form>
+
+{% if query and results is not none %}
+  <!-- ===== SEARCH RESULTS ===== -->
+  <div class="section">
+    <div class="results-info">
+      {% if results %}
+        Showing <span>{{ results|length }} result{% if results|length != 1 %}s{% endif %}</span> for "<span>{{ query }}</span>"
+      {% else %}
+        No results found for "<span>{{ query }}</span>" &mdash; try a different search.
+      {% endif %}
+    </div>
+    {% if results %}
+    <div class="video-row">
+      {% for video in results %}
+      <a href="/watch/{{ video.id }}" class="card">
+        <div class="card-thumb">
+          <img
+            src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
+            alt="{{ video.title }}"
+            loading="lazy"
+          >
+          <div class="card-overlay">
+            <div class="play-btn"></div>
+          </div>
+          <div class="card-duration">{{ video.duration }}</div>
+        </div>
+        <div class="card-info">
+          <div class="card-series">{{ video.series }}</div>
+          <div class="card-title">{{ video.title }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+{% else %}
+  <!-- ===== CONTINUE WATCHING ===== -->
+  <div class="section">
+    <div class="section-header">
+      <h2 class="section-title">Continue Watching</h2>
+      <a href="/browse?q=express" class="view-all">View all &rarr;</a>
+    </div>
+
+    {% if session.get('logged_in') %}
+    <div class="video-scroll">
+      {% for video in express_videos[:4] %}
+      <a href="/watch/{{ video.id }}" class="card">
+        <div class="card-thumb">
+          <img
+            src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
+            alt="{{ video.title }}"
+            loading="lazy"
+          >
+          <div class="card-overlay">
+            <div class="play-btn"></div>
+          </div>
+          <div class="card-duration">{{ video.duration }}</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" style="width:{{ [20, 55, 80, 35][loop.index0] }}%;"></div>
+        </div>
+        <div class="card-info">
+          <div class="card-series">{{ video.series }}</div>
+          <div class="card-title">{{ video.title }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="placeholder-box">
+      <span>&#128274;</span> <a href="/login">Sign in</a> to track your progress and pick up where you left off.
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="teal-line"></div>
+
+  <!-- ===== EXPRESS 2026 ===== -->
+  <div style="background:#0f0f0f; padding:2.5rem 0;">
+    <div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+      <div class="section-header">
+        <div>
+          <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.3rem;">Series</div>
+          <h2 class="section-title">2026 EXPRESS: A Year Of 10-Minute Workouts</h2>
+        </div>
+        <a href="/browse?q=express" class="view-all">View all 26 &rarr;</a>
+      </div>
+      <p style="color:rgba(255,255,255,0.45); font-size:0.85rem; margin-bottom:1.2rem;">Daily 10-minute Express workouts designed to keep you moving every single day of 2026.</p>
+
+      <div class="video-scroll">
+        {% for video in express_videos %}
+        <a href="/watch/{{ video.id }}" class="card">
+          <div class="card-thumb">
+            <img
+              src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
+              alt="{{ video.title }}"
+              loading="lazy"
+            >
+            <div class="card-overlay">
+              <div class="play-btn"></div>
+            </div>
+            <div class="card-duration">{{ video.duration }}</div>
+          </div>
+          <div class="card-info">
+            <div class="card-series">{{ video.series }}</div>
+            <div class="card-title">{{ video.title }}</div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="teal-line"></div>
+
+  <!-- ===== REVELATION ===== -->
+  <div style="padding:2.5rem 0;">
+    <div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+      <div class="section-header">
+        <div>
+          <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.3rem;">Bible Study Series</div>
+          <h2 class="section-title">REVELATION: Verse-By-Verse Breakdown</h2>
+        </div>
+        <a href="/browse?q=revelation" class="view-all">View all 11 &rarr;</a>
+      </div>
+      <p style="color:rgba(255,255,255,0.45); font-size:0.85rem; margin-bottom:1.2rem;">A deep, engaging verse-by-verse walk through the most prophetic book of the Bible.</p>
+
+      <div class="video-scroll">
+        {% for video in revelation_videos %}
+        <a href="/watch/{{ video.id }}" class="card">
+          <div class="card-thumb">
+            <img
+              src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
+              alt="{{ video.title }}"
+              loading="lazy"
+            >
+            <div class="card-overlay">
+              <div class="play-btn"></div>
+            </div>
+            <div class="card-duration">{{ video.duration }}</div>
+          </div>
+          <div class="card-info">
+            <div class="card-series">{{ video.series }}</div>
+            <div class="card-title">{{ video.title }}</div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="teal-line"></div>
+
+  <!-- ===== MY LIST ===== -->
+  <div class="section">
+    <div class="section-header">
+      <h2 class="section-title">My List</h2>
+    </div>
+    {% if session.get('logged_in') %}
+    <div class="placeholder-box">
+      You haven't saved any videos yet. Browse content and click the bookmark icon to add videos here.
+    </div>
+    {% else %}
+    <div class="placeholder-box">
+      <a href="/login">Sign in</a> to save videos to your list and access them quickly.
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="teal-line"></div>
+
+  <!-- ===== TITLES AVAILABLE FOR PURCHASE ===== -->
+  <div style="background:#0f0f0f; padding:2.5rem 0 3rem;">
+    <div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+      <div class="section-header">
+        <div>
+          <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.3rem;">Programs</div>
+          <h2 class="section-title">Titles Available for Purchase</h2>
+        </div>
+        <a href="/programs" class="view-all">See all programs &rarr;</a>
+      </div>
+
+      {% set program_icons = ['🏋️', '🔥', '💪', '🥗', '⚡', '🎯', '🧘', '🏃'] %}
+      <div class="programs-grid">
+        {% for program in express_videos[:8] %}
+        {# We use express_videos just to count; programs come from context #}
+        {% endfor %}
+        {# Actually render first 8 programs — passed via reveal from browse route indirectly #}
+      </div>
+
+      <!-- Inline program mini-grid using hardcoded first 8 items rendered as cards -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:1rem;">
+        {% set prog_data = [
+          {"title":"Foundation To Fire","count":6,"icon":"🔥"},
+          {"title":"Post-Super Bowl Shred 26","count":8,"icon":"🏃"},
+          {"title":"Tighter Tummy In 10 Days","count":8,"icon":"💪"},
+          {"title":"The Jingle Bell Challenge","count":29,"icon":"🎯"},
+          {"title":"X1 Bodyweight","count":1,"icon":"⚡"},
+          {"title":"The Ultimate Core & Cardio Trainer","count":10,"icon":"🏋️"},
+          {"title":"28-Day Pre-Holiday Sizzle","count":6,"icon":"🌟"},
+          {"title":"Strength Academy 2024 October","count":9,"icon":"🥊"},
+        ] %}
+        {% for p in prog_data %}
+        <a href="/programs" class="program-card">
+          <div class="program-thumb">
+            <span class="program-thumb-icon">{{ p.icon }}</span>
+          </div>
+          <div class="program-info">
+            <div class="program-title">{{ p.title }}</div>
+            <div class="program-count">{{ p.count }} video{% if p.count != 1 %}s{% endif %}</div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+{% endif %}
+
+{% endblock %}

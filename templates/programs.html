@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}All Programs — TRAIN4LIFE{% endblock %}
+
+{% block content %}
+
+<!-- ===== PAGE HEADER ===== -->
+<div style="background:linear-gradient(135deg,#0a0a0a,#1a1a2e 60%,#141414); padding:3rem 2rem 2rem; border-bottom:1px solid rgba(255,255,255,0.06);">
+  <div style="max-width:1400px; margin:0 auto;">
+    <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:3px; margin-bottom:0.5rem;">TRAIN4LIFE</div>
+    <h1 style="font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; letter-spacing:1px; margin-bottom:0.5rem;">All Programs</h1>
+    <p style="color:rgba(255,255,255,0.5); font-size:0.95rem; max-width:550px; line-height:1.6;">
+      Structured challenge programs, meal plans, and focused training series. Each program is designed to deliver real results in a set timeframe.
+    </p>
+  </div>
+</div>
+
+<!-- ===== PROGRAMS GRID ===== -->
+<div style="max-width:1400px; margin:0 auto; padding:2.5rem 2rem 4rem;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
+    <div style="font-size:0.85rem; color:rgba(255,255,255,0.4);">{{ programs|length }} programs available</div>
+    <a href="/subscribe" class="btn-teal">Get All Access</a>
+  </div>
+
+  {% set program_icons = ['🔥','🏃','💪','🎯','⚡','🏋️','🌟','🥊','📚','🧘','💥','🎽','🥗','🍽️','✂️','🏆','🌿','👩','🔔','🏅','🔔','🌞','👗','⚖️'] %}
+
+  <div class="programs-grid">
+    {% for program in programs %}
+    <div class="program-card" style="cursor:default;">
+      <div class="program-thumb" style="background:linear-gradient(135deg,
+        {% if loop.index0 % 4 == 0 %}#1d6b66,#22b9b0
+        {% elif loop.index0 % 4 == 1 %}#1a5c4a,#2f8c78
+        {% elif loop.index0 % 4 == 2 %}#0e3d3a,#1d6b66
+        {% else %}#163c30,#1a5c4a
+        {% endif %}
+      );">
+        <span class="program-thumb-icon">{{ program_icons[loop.index0 % program_icons|length] }}</span>
+      </div>
+      <div class="program-info">
+        <div class="program-title">{{ program.title }}</div>
+        <div class="program-count">{{ program.count }} video{% if program.count != 1 %}s{% endif %}</div>
+        <div style="margin-top:0.6rem;">
+          <a href="/subscribe" style="font-size:0.75rem; color:#22b9b0; font-weight:700;">Subscribe to watch &rarr;</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+<!-- ===== CTA FOOTER ===== -->
+<div style="background:#0f0f0f; border-top:1px solid rgba(255,255,255,0.06); padding:3rem 2rem; text-align:center;">
+  <div style="max-width:500px; margin:0 auto;">
+    <h2 style="font-size:1.6rem; font-weight:700; margin-bottom:0.75rem;">Access All Programs</h2>
+    <p style="color:rgba(255,255,255,0.55); margin-bottom:1.5rem; line-height:1.6; font-size:0.9rem;">
+      Subscribe for full access to every program, the Express series, Revelation Bible study, and everything we add — all for one low monthly price.
+    </p>
+    <a href="/subscribe" class="btn-teal" style="font-size:1rem; padding:0.75rem 2rem;">Subscribe &mdash; $6.99/month</a>
+    <div style="margin-top:0.75rem; color:rgba(255,255,255,0.3); font-size:0.8rem;">or $55/year &bull; Cancel anytime</div>
+  </div>
+</div>
+
+{% endblock %}

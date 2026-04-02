@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}TRAIN4LIFE — Faith, Fitness & Culture{% endblock %}
+
+{% block content %}
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <h1>TRAIN FOR <span class="hero-accent">LIFE</span></h1>
+  <p class="hero-sub">Faith, Fitness &amp; Culture — Stream anytime, anywhere.</p>
+  <div class="hero-actions">
+    <a href="/browse" class="btn-teal">Start Watching</a>
+    <a href="/programs" class="hero-link">Or purchase videos individually &rarr;</a>
+  </div>
+</section>
+
+<div class="teal-line"></div>
+
+<!-- ===== BENEFITS ===== -->
+<div class="benefits">
+  <div class="benefit">
+    <div class="benefit-icon">📺</div>
+    <h3>Unlimited Streaming</h3>
+    <p>Watch every workout and teaching whenever you want, as many times as you want.</p>
+  </div>
+  <div class="benefit">
+    <div class="benefit-icon">📱</div>
+    <h3>Watch Anywhere</h3>
+    <p>Phone, tablet, laptop, or TV — take TRAIN4LIFE with you wherever life takes you.</p>
+  </div>
+  <div class="benefit">
+    <div class="benefit-icon">🔥</div>
+    <h3>New Content Weekly</h3>
+    <p>Fresh 10-minute Express workouts, Bible studies, and challenge programs every week.</p>
+  </div>
+  <div class="benefit">
+    <div class="benefit-icon">❤️</div>
+    <h3>Support the Creators</h3>
+    <p>Your membership directly helps us create more faith-based fitness content.</p>
+  </div>
+</div>
+
+<div class="teal-line"></div>
+
+<!-- ===== SAMPLE VIDEOS ===== -->
+<div style="background:#0f0f0f; padding:3rem 0 2rem;">
+  <div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+    <div class="section-header">
+      <div>
+        <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.4rem;">Get All Access To The Entire</div>
+        <h2 style="font-size:clamp(1.3rem,3vw,1.9rem); font-weight:700; letter-spacing:1px;">TRAIN FOR LIFE Library</h2>
+      </div>
+      <a href="/browse" class="view-all">Browse all &rarr;</a>
+    </div>
+    <p style="color:rgba(255,255,255,0.5); font-size:0.9rem; margin-bottom:1.5rem;">Check out a sample of what's waiting for you inside...</p>
+
+    <div class="video-scroll">
+      {% for video in sample_videos %}
+      <a href="/watch/{{ video.id }}" class="card">
+        <div class="card-thumb">
+          <img
+            src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
+            alt="{{ video.title }}"
+            loading="lazy"
+          >
+          <div class="card-overlay">
+            <div class="play-btn"></div>
+          </div>
+          <div class="card-duration">{{ video.duration }}</div>
+        </div>
+        <div class="card-info">
+          <div class="card-series">{{ video.series }}</div>
+          <div class="card-title">{{ video.title }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- ===== DIVIDER BANNER ===== -->
+<div class="divider-banner">
+  <h2>Watch from anywhere</h2>
+  <p>No television provider needed &mdash; just an internet connection and a device you already own.</p>
+  <div style="display:flex; justify-content:center; gap:2rem; margin-top:1.5rem; flex-wrap:wrap;">
+    <div style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:0.4rem;">💻</div>
+      <div style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Desktop</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:0.4rem;">📱</div>
+      <div style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Mobile</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:0.4rem;">📺</div>
+      <div style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Smart TV</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:0.4rem;">⌚</div>
+      <div style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Tablet</div>
+    </div>
+  </div>
+</div>
+
+<div class="teal-line"></div>
+
+<!-- ===== BUY FROM TRAIN4LIFE ===== -->
+<div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+  <div class="section-header" style="margin-top:2.5rem; margin-bottom:1.2rem;">
+    <div>
+      <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.4rem;">Featured Programs</div>
+      <h2 class="section-title" style="font-size:1.2rem;">Buy from TRAIN4LIFE</h2>
+    </div>
+    <a href="/programs" class="view-all">See all programs &rarr;</a>
+  </div>
+
+  <div class="programs-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); margin-bottom:2.5rem;">
+    {% set program_icons = ['🏋️', '🔥', '💪', '🥗', '⚡', '🎯', '🧘', '🏃'] %}
+    {% for program in programs %}
+    <a href="/programs" class="program-card">
+      <div class="program-thumb">
+        <span class="program-thumb-icon">{{ program_icons[loop.index0 % program_icons|length] }}</span>
+      </div>
+      <div class="program-info">
+        <div class="program-title">{{ program.title }}</div>
+        <div class="program-count">{{ program.count }} video{% if program.count != 1 %}s{% endif %}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ===== CTA SECTION ===== -->
+<div style="background:linear-gradient(135deg,#0d1f1e 0%,#0f2420 100%); border-top:1px solid rgba(34,185,176,0.2); border-bottom:1px solid rgba(34,185,176,0.2); padding:3.5rem 2rem; text-align:center;">
+  <div style="max-width:600px; margin:0 auto;">
+    <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:3px; margin-bottom:1rem;">Join Today</div>
+    <h2 style="font-size:clamp(1.5rem,4vw,2.2rem); font-weight:700; margin-bottom:0.75rem;">Ready to Train for Life?</h2>
+    <p style="color:rgba(255,255,255,0.6); margin-bottom:2rem; line-height:1.6;">Get full access to the entire TRAIN4LIFE library — 10-minute Express workouts, the Revelation series, challenge programs, and everything we add going forward.</p>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:0.75rem;">
+      <a href="/subscribe" class="btn-teal" style="font-size:1rem; padding:0.8rem 2.5rem;">Get All Access — $6.99/mo</a>
+      <span style="color:rgba(255,255,255,0.35); font-size:0.82rem;">or $55/year &bull; Cancel anytime</span>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
