@@ -183,11 +183,7 @@
             {% if video.thumbnail %}
             <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
             {% else %}
-            <div style="position:absolute;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;">
-              <div style="width:40px;height:40px;background:rgba(34,185,176,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;">
-                <div style="border-left:14px solid rgba(255,255,255,0.6);border-top:8px solid transparent;border-bottom:8px solid transparent;margin-left:3px;"></div>
-              </div>
-            </div>
+            <div style="position:absolute;inset:0;background:#1a1a1a;"></div>
             {% endif %}
             <div class="card-overlay">
               <div class="play-btn"></div>

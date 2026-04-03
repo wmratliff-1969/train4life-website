@@ -88,9 +88,7 @@
           {% elif v.youtube_id %}
           <img src="https://img.youtube.com/vi/{{ v.youtube_id }}/mqdefault.jpg" alt="{{ v.title }}" loading="lazy">
           {% else %}
-          <div style="position:absolute;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;">
-            <div class="play-btn" style="opacity:0.3;"></div>
-          </div>
+          <div style="position:absolute;inset:0;background:#1a1a1a;"></div>
           {% endif %}
           <div class="card-overlay">
             <div class="play-btn"></div>
