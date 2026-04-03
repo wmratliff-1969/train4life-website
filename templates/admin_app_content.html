@@ -1,0 +1,549 @@
+{% extends "base.html" %}
+{% block title %}App Content Manager — TRAIN4LIFE{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+/* ── Reset & base ── */
+.admin-wrap { display:flex; flex-direction:column; height:calc(100vh - 56px); overflow:hidden; background:#0a0a0a; }
+.admin-topbar {
+  display:flex; align-items:center; gap:1rem;
+  padding:0.55rem 1.2rem; background:#0d0d0d;
+  border-bottom:1px solid rgba(255,255,255,0.07); flex-shrink:0;
+}
+.admin-topbar h1 { font-size:0.78rem; font-weight:900; letter-spacing:2.5px; color:#22b9b0; margin:0; }
+.badge { font-size:0.65rem; background:rgba(34,185,176,0.12); color:#22b9b0; border:1px solid rgba(34,185,176,0.3); border-radius:20px; padding:2px 8px; }
+.save-btn {
+  margin-left:auto; background:#22b9b0; border:none; border-radius:8px; color:#000;
+  font-weight:900; font-size:0.75rem; letter-spacing:1.5px; padding:0.45rem 1.4rem;
+  cursor:pointer; transition:filter 0.15s;
+}
+.save-btn:hover { filter:brightness(1.1); }
+.save-status { font-size:0.75rem; font-weight:700; }
+
+/* ── 3-column grid ── */
+.admin-cols {
+  display:grid;
+  grid-template-columns: 1fr 320px 280px;
+  gap:0;
+  flex:1; overflow:hidden;
+}
+.col { display:flex; flex-direction:column; overflow:hidden; }
+.col-left  { border-right:1px solid rgba(255,255,255,0.06); }
+.col-mid   { border-right:1px solid rgba(255,255,255,0.06); }
+.col-right {}
+
+.col-head {
+  padding:0.6rem 0.9rem; background:#0d0d0d;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+  font-size:0.65rem; font-weight:900; letter-spacing:2px; color:rgba(255,255,255,0.4);
+  flex-shrink:0;
+}
+.col-scroll { overflow-y:auto; flex:1; }
+
+/* ── Video library ── */
+.lib-filters { display:flex; gap:6px; padding:0.5rem 0.8rem; flex-shrink:0; border-bottom:1px solid rgba(255,255,255,0.05); flex-wrap:wrap; }
+.lib-search { flex:1; min-width:120px; background:#111; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:5px 8px; color:#fff; font-size:0.75rem; }
+.lib-filter { background:#111; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:5px 6px; color:#fff; font-size:0.72rem; }
+
+.video-row {
+  display:flex; align-items:center; gap:0.6rem;
+  padding:5px 10px; border-bottom:1px solid rgba(255,255,255,0.03);
+  transition:background 0.1s;
+}
+.video-row:hover { background:rgba(255,255,255,0.025); }
+.video-row img { width:64px; height:38px; object-fit:cover; border-radius:4px; background:#1a1a1a; flex-shrink:0; }
+.v-no-thumb { width:64px; height:38px; background:#1a1a1a; border-radius:4px; flex-shrink:0; }
+.video-info { flex:1; min-width:0; }
+.v-title { font-size:0.72rem; font-weight:700; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.v-sub   { font-size:0.62rem; color:rgba(255,255,255,0.3); }
+.cb-group { display:flex; flex-direction:column; gap:3px; flex-shrink:0; }
+.cb-label {
+  display:flex; align-items:center; gap:4px;
+  font-size:0.62rem; font-weight:800; letter-spacing:0.5px;
+  cursor:pointer; padding:2px 5px; border-radius:4px;
+  border:1px solid transparent; transition:all 0.12s; white-space:nowrap;
+}
+.cb-exp   { color:#ff6b6b; }
+.cb-bible { color:#a855f7; }
+.cb-exp:has(input:checked)   { background:rgba(255,107,107,0.1); border-color:rgba(255,107,107,0.4); }
+.cb-bible:has(input:checked) { background:rgba(168,85,247,0.1);  border-color:rgba(168,85,247,0.4); }
+
+/* ── Playlist (middle) ── */
+.pl-section { flex-shrink:0; }
+.pl-section-head {
+  padding:0.45rem 0.8rem; font-size:0.62rem; font-weight:900; letter-spacing:2px;
+  display:flex; align-items:center; gap:6px;
+}
+.pl-count { margin-left:auto; color:rgba(255,255,255,0.25); font-weight:400; }
+.sortable-list { min-height:40px; padding:4px; }
+.pl-item {
+  display:flex; align-items:center; gap:5px;
+  padding:5px 6px; background:#111; border:1px solid rgba(255,255,255,0.06);
+  border-radius:7px; margin-bottom:5px; cursor:grab; user-select:none;
+}
+.pl-item.sortable-ghost { opacity:0.35; }
+.drag-handle { color:rgba(255,255,255,0.2); font-size:12px; flex-shrink:0; }
+.pl-num { font-size:0.65rem; font-weight:900; color:rgba(255,255,255,0.25); width:16px; text-align:right; flex-shrink:0; }
+.pl-thumb { width:46px; height:28px; object-fit:cover; border-radius:3px; background:#1a1a1a; flex-shrink:0; }
+.pl-no-thumb { width:46px; height:28px; background:#1a1a1a; border-radius:3px; flex-shrink:0; }
+.pl-title { font-size:0.7rem; font-weight:700; flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.pl-actions { display:flex; gap:2px; flex-shrink:0; }
+.pl-btn { background:rgba(255,255,255,0.05); border:none; border-radius:4px; color:rgba(255,255,255,0.4); font-size:10px; padding:2px 5px; cursor:pointer; }
+.pl-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+.pl-rm { color:rgba(255,80,80,0.4); }
+.pl-rm:hover { background:rgba(255,80,80,0.08); color:#ff6b6b; }
+.pl-empty { padding:14px; text-align:center; font-size:0.72rem; color:rgba(255,255,255,0.15); }
+
+.reset-btn { font-size:0.65rem; background:rgba(255,255,255,0.05); border:none; border-radius:6px; color:rgba(255,255,255,0.4); padding:3px 10px; cursor:pointer; margin:0 8px 6px; }
+.reset-btn:hover { color:#fff; background:rgba(255,255,255,0.08); }
+
+/* ── Preview (right) ── */
+.preview-section { flex-shrink:0; }
+.preview-section-head {
+  padding:0.4rem 0.8rem; font-size:0.6rem; font-weight:900; letter-spacing:2px;
+  display:flex; align-items:center; gap:6px;
+}
+.preview-list { padding:4px 8px; }
+.preview-item { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+.preview-num { font-size:0.62rem; font-weight:900; color:rgba(255,255,255,0.2); width:16px; text-align:right; flex-shrink:0; }
+.preview-thumb { width:38px; height:22px; object-fit:cover; border-radius:3px; background:#1a1a1a; flex-shrink:0; }
+.preview-no-thumb { width:38px; height:22px; background:#1a1a1a; border-radius:3px; flex-shrink:0; }
+.preview-texts { flex:1; min-width:0; }
+.preview-line1 { font-size:0.67rem; font-weight:700; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.preview-line2 { font-size:0.58rem; color:rgba(255,255,255,0.3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.preview-empty { padding:12px 8px; font-size:0.7rem; color:rgba(255,255,255,0.15); }
+
+@media (max-width:1000px) {
+  .admin-cols { grid-template-columns: 1fr 290px; }
+  .col-right { display:none; }
+}
+@media (max-width:700px) {
+  .admin-cols { grid-template-columns: 1fr; }
+  .col-mid { display:none; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  <!-- Top bar -->
+  <div class="admin-topbar">
+    <h1>APP CONTENT MANAGER</h1>
+    <span class="badge">{{ all_videos|length }} videos</span>
+    <span id="saveStatus" class="save-status"></span>
+    <button class="save-btn" onclick="saveAndPublish()">💾 SAVE &amp; PUBLISH TO APP</button>
+    <a href="{{ url_for('admin_logout') }}" style="font-size:0.72rem;color:rgba(255,255,255,0.3);text-decoration:none;margin-left:8px;">Logout</a>
+  </div>
+
+  <div class="admin-cols">
+
+    <!-- ══ LEFT: Video Library ══ -->
+    <div class="col col-left">
+      <div class="col-head">ALL VHX VIDEOS <span id="libCount" style="font-weight:400;opacity:0.6;"></span></div>
+      <div class="lib-filters">
+        <input class="lib-search" type="text" id="searchInput" placeholder="Search…" oninput="filterVideos()">
+        <select class="lib-filter" id="seriesFilter" onchange="filterVideos()">
+          <option value="">All series</option>
+          {% set sset = namespace(items=[]) %}
+          {% for v in all_videos %}
+            {% if v.series and v.series not in sset.items %}{% set sset.items = sset.items + [v.series] %}{% endif %}
+          {% endfor %}
+          {% for s in sset.items|sort %}<option>{{ s }}</option>{% endfor %}
+        </select>
+        <select class="lib-filter" id="sourceFilter" onchange="filterVideos()">
+          <option value="">All sources</option>
+          <option value="vhx">VHX</option>
+          <option value="youtube">YouTube</option>
+        </select>
+      </div>
+      <div class="col-scroll" id="videoList">
+        {% for v in all_videos %}
+        <div class="video-row"
+             data-id="{{ v.id }}"
+             data-title="{{ (v.displayTitle ~ ' ' ~ v.subTitle ~ ' ' ~ v.title)|lower }}"
+             data-series="{{ v.series|lower }}"
+             data-source="{{ v.source }}"
+             data-thumb="{{ v.thumbnail }}"
+             data-vhx="{{ v.vhx_url }}"
+             data-fulltitle="{{ v.title|replace('"','&quot;') }}"
+             data-display="{{ v.displayTitle }}"
+             data-sub="{{ v.subTitle }}">
+          {% if v.thumbnail %}
+            <img src="{{ v.thumbnail }}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+            <div class="v-no-thumb" style="display:none;"></div>
+          {% else %}
+            <div class="v-no-thumb"></div>
+          {% endif %}
+          <div class="video-info">
+            <div class="v-title">{{ v.displayTitle }}{% if v.subTitle %} — {{ v.subTitle }}{% endif %}</div>
+            <div class="v-sub">{{ v.series }}{% if v.duration %} · {{ v.duration }}{% endif %} · {{ v.source }}</div>
+          </div>
+          <div class="cb-group">
+            <label class="cb-label cb-exp">
+              <input type="checkbox" name="exp_{{ v.id }}"
+                {% if v.id in selected_ids and v.id in (app_content.express|map(attribute='id')|list) %}checked{% endif %}
+                onchange="onCheck(this,'express','{{ v.id }}')">
+              EXP
+            </label>
+            <label class="cb-label cb-bible">
+              <input type="checkbox" name="bbl_{{ v.id }}"
+                {% if v.id in selected_ids and v.id in (app_content.bible_bootcamp|map(attribute='id')|list) %}checked{% endif %}
+                onchange="onCheck(this,'bible_bootcamp','{{ v.id }}')">
+              BIBLE
+            </label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div><!-- /col-left -->
+
+    <!-- ══ MIDDLE: Playlist ══ -->
+    <div class="col col-mid">
+      <div class="col-head">APP PLAYLIST</div>
+      <div class="col-scroll">
+
+        <!-- EXPRESS -->
+        <div class="pl-section">
+          <div class="pl-section-head" style="color:#ff6b6b;">
+            ● EXPRESS
+            <span class="pl-count" id="expCount">{{ app_content.express|length }} videos</span>
+          </div>
+          <ul class="sortable-list" id="expList">
+            {% for v in app_content.express|sort(attribute='order') %}
+            <li class="pl-item"
+                data-id="{{ v.id }}"
+                data-display="{{ v.displayTitle|default(v.title) }}"
+                data-sub="{{ v.subTitle|default('') }}"
+                data-thumb="{{ v.thumbnail|default('') }}"
+                data-vhx="{{ v.vhx_url|default('') }}"
+                data-fulltitle="{{ v.title|default(v.fullTitle|default('')) }}">
+              <span class="drag-handle">⠿</span>
+              <span class="pl-num">{{ loop.index }}</span>
+              {% if v.thumbnail %}<img class="pl-thumb" src="{{ v.thumbnail }}" alt="" loading="lazy">
+              {% else %}<div class="pl-no-thumb"></div>{% endif %}
+              <span class="pl-title">{{ v.displayTitle|default(v.title) }}{% if v.subTitle %} — {{ v.subTitle }}{% endif %}</span>
+              <div class="pl-actions">
+                <button class="pl-btn" onclick="moveUp('expList',this)">↑</button>
+                <button class="pl-btn" onclick="moveDown('expList',this)">↓</button>
+                <button class="pl-btn pl-rm" onclick="removePl('express','{{ v.id }}',this)">✕</button>
+              </div>
+            </li>
+            {% else %}<li class="pl-empty" id="expEmpty">No videos added</li>{% endfor %}
+          </ul>
+          <button class="reset-btn" onclick="autoSort('expList','expCount')">↺ Auto-Sort</button>
+        </div>
+
+        <!-- BIBLE BOOTCAMP -->
+        <div class="pl-section">
+          <div class="pl-section-head" style="color:#a855f7;">
+            ● BIBLE BOOTCAMP
+            <span class="pl-count" id="bblCount">{{ app_content.bible_bootcamp|length }} videos</span>
+          </div>
+          <ul class="sortable-list" id="bblList">
+            {% for v in app_content.bible_bootcamp|sort(attribute='order') %}
+            <li class="pl-item"
+                data-id="{{ v.id }}"
+                data-display="{{ v.displayTitle|default(v.title) }}"
+                data-sub="{{ v.subTitle|default('') }}"
+                data-thumb="{{ v.thumbnail|default('') }}"
+                data-vhx="{{ v.vhx_url|default('') }}"
+                data-fulltitle="{{ v.title|default(v.fullTitle|default('')) }}">
+              <span class="drag-handle">⠿</span>
+              <span class="pl-num">{{ loop.index }}</span>
+              {% if v.thumbnail %}<img class="pl-thumb" src="{{ v.thumbnail }}" alt="" loading="lazy">
+              {% else %}<div class="pl-no-thumb"></div>{% endif %}
+              <span class="pl-title">{{ v.displayTitle|default(v.title) }}{% if v.subTitle %} — {{ v.subTitle }}{% endif %}</span>
+              <div class="pl-actions">
+                <button class="pl-btn" onclick="moveUp('bblList',this)">↑</button>
+                <button class="pl-btn" onclick="moveDown('bblList',this)">↓</button>
+                <button class="pl-btn pl-rm" onclick="removePl('bible_bootcamp','{{ v.id }}',this)">✕</button>
+              </div>
+            </li>
+            {% else %}<li class="pl-empty" id="bblEmpty">No videos added</li>{% endfor %}
+          </ul>
+          <button class="reset-btn" onclick="autoSort('bblList','bblCount')">↺ Auto-Sort</button>
+        </div>
+
+      </div><!-- /col-scroll -->
+    </div><!-- /col-mid -->
+
+    <!-- ══ RIGHT: App Preview ══ -->
+    <div class="col col-right">
+      <div class="col-head">APP PREVIEW</div>
+      <div class="col-scroll">
+
+        <div class="preview-section">
+          <div class="preview-section-head" style="color:#ff6b6b;">● EXPRESS</div>
+          <div class="preview-list" id="expPreview">
+            {% for v in app_content.express|sort(attribute='order') %}
+            <div class="preview-item">
+              <span class="preview-num">{{ loop.index }}</span>
+              {% if v.thumbnail %}<img class="preview-thumb" src="{{ v.thumbnail }}" alt="" loading="lazy">
+              {% else %}<div class="preview-no-thumb"></div>{% endif %}
+              <div class="preview-texts">
+                <div class="preview-line1">{{ v.displayTitle|default(v.title) }}</div>
+                <div class="preview-line2">{{ v.subTitle|default('') }}</div>
+              </div>
+            </div>
+            {% else %}<div class="preview-empty">Empty</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="preview-section" style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.05); padding-top:4px;">
+          <div class="preview-section-head" style="color:#a855f7;">● BIBLE BOOTCAMP</div>
+          <div class="preview-list" id="bblPreview">
+            {% for v in app_content.bible_bootcamp|sort(attribute='order') %}
+            <div class="preview-item">
+              <span class="preview-num">{{ loop.index }}</span>
+              {% if v.thumbnail %}<img class="preview-thumb" src="{{ v.thumbnail }}" alt="" loading="lazy">
+              {% else %}<div class="preview-no-thumb"></div>{% endif %}
+              <div class="preview-texts">
+                <div class="preview-line1">{{ v.displayTitle|default(v.title) }}</div>
+                <div class="preview-line2">{{ v.subTitle|default('') }}</div>
+              </div>
+            </div>
+            {% else %}<div class="preview-empty">Empty</div>{% endfor %}
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /col-right -->
+
+  </div><!-- /admin-cols -->
+</div>
+
+<script>
+// ── Title parsing (mirrors Python parse_video_title) ─────────────────────
+var SERIES_PATS = [
+  [/\bexpress\b/i,                           'Express'],
+  [/\brevelation\b|\brev\s*ep|\brev\b/i,     'Revelation'],
+  [/\bbible\s*bootcamp\b|\bbootcamp\b/i,     'Bible Bootcamp'],
+];
+function parseTitle(t) {
+  t = (t || '').trim();
+  var series  = 'Other';
+  for (var i = 0; i < SERIES_PATS.length; i++) {
+    if (SERIES_PATS[i][0].test(t)) { series = SERIES_PATS[i][1]; break; }
+  }
+  var epM  = t.match(/(?:ep\.?\s*|#|no\.?\s*)(\d+)|\b(\d+)\b/i);
+  var ep   = epM ? parseInt(epM[1] || epM[2], 10) : 0;
+  var subM = t.match(/[—–\-:|]\s*(.+)$/);
+  var sub  = subM ? subM[1].trim() : '';
+  var disp = series + (ep ? ' ' + ep : '');
+  return { series:series, episode:ep, subTitle:sub, displayTitle:disp, fullTitle:t };
+}
+
+// ── Sortable init ─────────────────────────────────────────────────────────
+var sortExp = new Sortable(document.getElementById('expList'), {
+  animation:150, handle:'.drag-handle', ghostClass:'sortable-ghost',
+  onEnd: function() { renum('expList','expCount'); refreshPreview('express'); }
+});
+var sortBbl = new Sortable(document.getElementById('bblList'), {
+  animation:150, handle:'.drag-handle', ghostClass:'sortable-ghost',
+  onEnd: function() { renum('bblList','bblCount'); refreshPreview('bible_bootcamp'); }
+});
+
+function renum(listId, countId) {
+  var items = document.querySelectorAll('#'+listId+' .pl-item');
+  items.forEach(function(el,i){ var n=el.querySelector('.pl-num'); if(n) n.textContent=i+1; });
+  var c=document.getElementById(countId);
+  if(c) c.textContent=items.length+' video'+(items.length!==1?'s':'');
+  var emId = listId==='expList'?'expEmpty':'bblEmpty';
+  var em=document.getElementById(emId);
+  if(em) em.style.display=items.length?'none':'';
+}
+
+// ── Check / uncheck ───────────────────────────────────────────────────────
+function onCheck(cb, section, videoId) {
+  var row = cb.closest('.video-row');
+  var thumb  = row.dataset.thumb  || '';
+  var display= row.dataset.display|| '';
+  var sub    = row.dataset.sub    || '';
+  var vhx    = row.dataset.vhx    || '';
+  var full   = row.dataset.fulltitle || display;
+
+  var listId  = section==='express'?'expList':'bblList';
+  var countId = section==='express'?'expCount':'bblCount';
+  var otherSection = section==='express'?'bible_bootcamp':'express';
+  var otherPrefix  = section==='express'?'bbl_':'exp_';
+  var otherListId  = section==='express'?'bblList':'expList';
+  var otherCountId = section==='express'?'bblCount':'expCount';
+
+  // Uncheck & remove from other section
+  var otherCb = document.querySelector('input[name="'+otherPrefix+videoId+'"]');
+  if (otherCb && otherCb.checked) {
+    otherCb.checked = false;
+    removeFromList(otherListId, videoId);
+    renum(otherListId, otherCountId);
+    refreshPreview(otherSection);
+  }
+
+  if (cb.checked) {
+    addToList(listId, countId, videoId, display, sub, thumb, vhx, full);
+  } else {
+    removeFromList(listId, videoId);
+    renum(listId, countId);
+  }
+  refreshPreview(section);
+}
+
+function addToList(listId, countId, id, display, sub, thumb, vhx, full) {
+  removeFromList(listId, id);
+  var list = document.getElementById(listId);
+  var num  = list.querySelectorAll('.pl-item').length + 1;
+  var li   = document.createElement('li');
+  li.className='pl-item';
+  li.dataset.id=id; li.dataset.display=display; li.dataset.sub=sub;
+  li.dataset.thumb=thumb; li.dataset.vhx=vhx; li.dataset.fulltitle=full;
+  var section = listId==='expList'?'express':'bible_bootcamp';
+  li.innerHTML =
+    '<span class="drag-handle">⠿</span>'+
+    '<span class="pl-num">'+num+'</span>'+
+    (thumb?'<img class="pl-thumb" src="'+thumb+'" alt="" loading="lazy">':'<div class="pl-no-thumb"></div>')+
+    '<span class="pl-title">'+display+(sub?' — '+sub:'')+'</span>'+
+    '<div class="pl-actions">'+
+      '<button class="pl-btn" onclick="moveUp(\''+listId+'\',this)">↑</button>'+
+      '<button class="pl-btn" onclick="moveDown(\''+listId+'\',this)">↓</button>'+
+      '<button class="pl-btn pl-rm" onclick="removePl(\''+section+'\',\''+id+'\',this)">✕</button>'+
+    '</div>';
+  list.appendChild(li);
+  var em=document.getElementById(listId==='expList'?'expEmpty':'bblEmpty');
+  if(em) em.style.display='none';
+  renum(listId, countId);
+}
+
+function removeFromList(listId, id) {
+  var el=document.querySelector('#'+listId+' .pl-item[data-id="'+id+'"]');
+  if(el) el.remove();
+}
+
+function removePl(section, id, btn) {
+  var listId  = section==='express'?'expList':'bblList';
+  var countId = section==='express'?'expCount':'bblCount';
+  var prefix  = section==='express'?'exp_':'bbl_';
+  removeFromList(listId, id);
+  renum(listId, countId);
+  var cb=document.querySelector('input[name="'+prefix+id+'"]');
+  if(cb) cb.checked=false;
+  refreshPreview(section);
+}
+
+function moveUp(listId, btn) {
+  var li=btn.closest('.pl-item');
+  var prev=li.previousElementSibling;
+  if(prev && prev.classList.contains('pl-item')) { li.parentNode.insertBefore(li,prev); }
+  var countId=listId==='expList'?'expCount':'bblCount';
+  renum(listId,countId);
+  refreshPreview(listId==='expList'?'express':'bible_bootcamp');
+}
+function moveDown(listId, btn) {
+  var li=btn.closest('.pl-item');
+  var next=li.nextElementSibling;
+  if(next && next.classList.contains('pl-item')) { li.parentNode.insertBefore(next,li); }
+  var countId=listId==='expList'?'expCount':'bblCount';
+  renum(listId,countId);
+  refreshPreview(listId==='expList'?'express':'bible_bootcamp');
+}
+
+// ── Auto-sort by episode number ───────────────────────────────────────────
+function autoSort(listId, countId) {
+  var list  = document.getElementById(listId);
+  var items = Array.from(list.querySelectorAll('.pl-item'));
+  items.sort(function(a,b) {
+    var pa = parseTitle(a.dataset.fulltitle||a.dataset.display||'');
+    var pb = parseTitle(b.dataset.fulltitle||b.dataset.display||'');
+    if(pa.series !== pb.series) return pa.series < pb.series ? -1 : 1;
+    return (pa.episode||999) - (pb.episode||999);
+  });
+  items.forEach(function(li){ list.appendChild(li); });
+  renum(listId, countId);
+  refreshPreview(listId==='expList'?'express':'bible_bootcamp');
+}
+
+// ── Live preview update ───────────────────────────────────────────────────
+function refreshPreview(section) {
+  var listId   = section==='express'?'expList':'bblList';
+  var previewId= section==='express'?'expPreview':'bblPreview';
+  var preview  = document.getElementById(previewId);
+  if(!preview) return;
+  var items    = document.querySelectorAll('#'+listId+' .pl-item');
+  if(!items.length) { preview.innerHTML='<div class="preview-empty">Empty</div>'; return; }
+  var html='';
+  items.forEach(function(li,i) {
+    var thumb   = li.dataset.thumb||'';
+    var display = li.dataset.display||'';
+    var sub     = li.dataset.sub||'';
+    html+=
+      '<div class="preview-item">'+
+        '<span class="preview-num">'+(i+1)+'</span>'+
+        (thumb?'<img class="preview-thumb" src="'+thumb+'" alt="" loading="lazy">':'<div class="preview-no-thumb"></div>')+
+        '<div class="preview-texts">'+
+          '<div class="preview-line1">'+display+'</div>'+
+          '<div class="preview-line2">'+sub+'</div>'+
+        '</div>'+
+      '</div>';
+  });
+  preview.innerHTML=html;
+}
+
+// ── Search / filter ───────────────────────────────────────────────────────
+function filterVideos() {
+  var q   = document.getElementById('searchInput').value.toLowerCase();
+  var ser = document.getElementById('seriesFilter').value.toLowerCase();
+  var src = document.getElementById('sourceFilter').value;
+  var rows= document.querySelectorAll('.video-row');
+  var vis = 0;
+  rows.forEach(function(r) {
+    var show=(!q||r.dataset.title.includes(q))&&
+             (!ser||r.dataset.series.includes(ser))&&
+             (!src||r.dataset.source===src);
+    r.style.display=show?'':'none';
+    if(show) vis++;
+  });
+  var lc=document.getElementById('libCount');
+  if(lc) lc.textContent='('+vis+' shown)';
+}
+
+document.getElementById('libCount').textContent='('+document.querySelectorAll('.video-row').length+' total)';
+
+// ── Save & Publish ────────────────────────────────────────────────────────
+function buildList(listId) {
+  var arr=[];
+  document.querySelectorAll('#'+listId+' .pl-item').forEach(function(li,i){
+    var p=parseTitle(li.dataset.fulltitle||li.dataset.display||'');
+    arr.push({
+      id:           li.dataset.id,
+      title:        li.dataset.fulltitle||li.dataset.display,
+      thumbnail:    li.dataset.thumb||'',
+      vhx_url:      li.dataset.vhx||'',
+      order:        i+1,
+      sort_override:true,
+      series:       p.series,
+      episode:      p.episode,
+      subTitle:     p.subTitle,
+      displayTitle: p.displayTitle,
+      fullTitle:    p.fullTitle,
+    });
+  });
+  return arr;
+}
+
+function saveAndPublish() {
+  var st=document.getElementById('saveStatus');
+  st.style.color='rgba(255,255,255,0.4)'; st.textContent='Saving…';
+  fetch('/admin/app-content',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({express:buildList('expList'),bible_bootcamp:buildList('bblList')})
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.success){st.style.color='#22b9b0';st.textContent='✓ '+d.message;}
+    else{st.style.color='#ff6b6b';st.textContent='Error: '+(d.error||'Unknown');}
+  })
+  .catch(function(e){st.style.color='#ff6b6b';st.textContent='Network error';});
+}
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Admin Login — TRAIN4LIFE{% endblock %}
+
+{% block content %}
+<div style="min-height:60vh; display:flex; align-items:center; justify-content:center; padding:3rem 1rem;">
+  <div style="background:#111; border:1px solid rgba(34,185,176,0.2); border-radius:16px; padding:2.5rem 2rem; width:100%; max-width:380px;">
+    <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; letter-spacing:3px; text-transform:uppercase; text-align:center; margin-bottom:0.5rem;">Admin Access</div>
+    <h1 style="font-size:1.4rem; font-weight:900; text-align:center; margin-bottom:2rem; letter-spacing:1px;">TRAIN4LIFE</h1>
+
+    {% if error %}
+    <div style="background:rgba(255,80,80,0.12); border:1px solid rgba(255,80,80,0.3); border-radius:8px; padding:0.75rem 1rem; color:#ff8080; font-size:0.85rem; margin-bottom:1.2rem;">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+      <label style="display:block; font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.5); letter-spacing:1px; margin-bottom:0.4rem;">PASSWORD</label>
+      <input type="password" name="password" autofocus required
+        style="width:100%; background:#0d0d0d; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:0.7rem 1rem; color:#fff; font-size:0.95rem; margin-bottom:1.5rem;">
+      <button type="submit"
+        style="width:100%; background:#22b9b0; border:none; border-radius:8px; padding:0.8rem; color:#000; font-weight:900; font-size:0.95rem; letter-spacing:1px; cursor:pointer;">
+        ENTER
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

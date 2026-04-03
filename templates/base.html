@@ -329,10 +329,10 @@
       position: relative;
       min-height: 520px;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-end;
+      justify-content: flex-start;
       overflow: hidden;
-      text-align: center;
+      text-align: left;
     }
 
     .hero-bg {
@@ -355,45 +355,43 @@
     .hero-content {
       position: relative;
       z-index: 1;
-      padding: 5rem 2rem 4rem;
+      padding: 5rem 2rem 60px 60px;
       width: 100%;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    .hero-tagline {
-      font-size: clamp(0.75rem, 1.5vw, 0.9rem);
-      font-weight: 700;
-      font-style: italic;
-      color: #f0c040;
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      margin-bottom: 1rem;
+      max-width: 860px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
     }
 
     .hero h1 {
-      font-size: clamp(3rem, 8vw, 6rem);
+      font-size: clamp(2.5rem, 5vw, 4rem);
       font-weight: 700;
-      letter-spacing: 6px;
-      margin-bottom: 1rem;
+      color: #fff;
+      white-space: nowrap;
+      letter-spacing: 3px;
+      margin-bottom: 0.6rem;
       position: relative;
     }
 
-    .hero-accent {
-      color: #22b9b0;
+    .hero-tagline {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.8);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
     }
 
     .hero-sub {
-      font-size: 1.1rem;
+      font-size: 1rem;
       color: rgba(255,255,255,0.7);
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
       position: relative;
     }
 
     .hero-actions {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.75rem;
       position: relative;
     }
@@ -405,12 +403,12 @@
 
     .hero-actions .hero-link {
       font-size: 0.85rem;
-      color: rgba(255,255,255,0.5);
+      color: #22b9b0;
       transition: color 0.2s;
     }
 
     .hero-actions .hero-link:hover {
-      color: #22b9b0;
+      color: #fff;
     }
 
     /* ===== BENEFITS ===== */
@@ -1117,12 +1115,13 @@
       }
 
       .hero-content {
-        padding: 3rem 1.5rem 2.5rem;
+        padding: 3rem 1.5rem 2rem 1.5rem;
       }
 
       .hero h1 {
-        font-size: clamp(2.2rem, 12vw, 4rem);
-        letter-spacing: 3px;
+        font-size: clamp(2rem, 10vw, 3rem);
+        white-space: normal;
+        letter-spacing: 2px;
       }
 
       .nav-inner {

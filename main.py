@@ -1,8 +1,13 @@
 from flask import (Flask, render_template, redirect, url_for, session,
                    request, jsonify, flash, Response)
-import os, json, hashlib, datetime, re
+import os, json, hashlib, datetime, re, base64
 from collections import defaultdict
 from functools import wraps
+try:
+    import requests as _http
+    _HTTP_OK = True
+except ImportError:
+    _HTTP_OK = False
 
 # Load stripe conditionally so app works without it
 try:
@@ -136,6 +141,88 @@ REVELATION_VIDEOS = [
      "thumbnail":"https://img.youtube.com/vi/evVWecl3e3k/mqdefault.jpg","is_member_only":True},
 ]
 _yt_by_id = {v['id']: v for v in EXPRESS_VIDEOS + REVELATION_VIDEOS}
+
+# ── Title parsing ──────────────────────────────────────────────────────────────
+_SERIES_PATTERNS = [
+    (re.compile(r'\bexpress\b', re.I), 'Express'),
+    (re.compile(r'\brevelation\b|\brev\b|\bRev EP\b', re.I), 'Revelation'),
+    (re.compile(r'\bbible\s*bootcamp\b|\bbootcamp\b', re.I), 'Bible Bootcamp'),
+]
+_EP_RE  = re.compile(r'(?:ep\.?\s*|#|\bno\.?\s*)(\d+)|\b(\d+)\b', re.I)
+_SEP_RE = re.compile(r'[—–\-:|]\s*(.+)$')
+
+def parse_video_title(title):
+    t = (title or '').strip()
+    series = 'Other'
+    for pat, name in _SERIES_PATTERNS:
+        if pat.search(t):
+            series = name
+            break
+    ep_m  = _EP_RE.search(t)
+    episode = int(ep_m.group(1) or ep_m.group(2)) if ep_m else 0
+    sub_m   = _SEP_RE.search(t)
+    sub     = sub_m.group(1).strip() if sub_m else ''
+    display = f"{series} {episode}" if episode else series
+    return {'series': series, 'episode': episode, 'subTitle': sub,
+            'displayTitle': display, 'fullTitle': t}
+
+# ── VHX API helper ─────────────────────────────────────────────────────────────
+VHX_API_KEY  = os.environ.get('VHX_API_KEY', 'W8R9VxBi3sWsDk8G5ymMTpRqgXwWyU4i')
+VHX_BASE_URL = 'https://api.vhx.tv'
+
+def _vhx_auth_header():
+    creds = base64.b64encode(f'{VHX_API_KEY}:'.encode()).decode()
+    return {'Authorization': f'Basic {creds}'}
+
+def _fetch_vhx_videos(per_page=100, page=1):
+    """Fetch a page of videos from the VHX API."""
+    if not _HTTP_OK:
+        return []
+    try:
+        r = _http.get(f'{VHX_BASE_URL}/videos',
+                      params={'per_page': per_page, 'page': page, 'sort': 'newest'},
+                      headers=_vhx_auth_header(), timeout=20)
+        if not r.ok:
+            return []
+        data = r.json()
+        return data.get('_embedded', {}).get('videos', [])
+    except Exception:
+        return []
+
+def _vhx_video_to_curator(v):
+    """Shape a raw VHX API video object into our curator format."""
+    vid_id   = str(v.get('id') or v.get('_id', ''))
+    title    = v.get('title') or v.get('name') or 'Untitled'
+    parsed   = parse_video_title(title)
+    thumb    = ''
+    thumb_obj = v.get('thumbnail') or {}
+    for size in ('large', 'medium', 'small'):
+        link = thumb_obj.get(size) or {}
+        if isinstance(link, dict):
+            thumb = link.get('location') or link.get('href', '')
+        elif isinstance(link, str):
+            thumb = link
+        if thumb:
+            break
+    vhx_url = (v.get('_links') or {}).get('self', {}).get('href', '') or \
+              v.get('href', '') or f'https://train4life.vhx.tv/videos/{vid_id}'
+    dur  = v.get('duration', '')
+    tags = v.get('tags') or []
+    if tags and isinstance(tags[0], dict):
+        tags = [t.get('name', '') for t in tags]
+    return {
+        'id':           vid_id,
+        'title':        title,
+        'thumbnail':    thumb,
+        'vhx_url':      vhx_url,
+        'duration':     dur,
+        'tags':         tags,
+        'series':       parsed['series'],
+        'episode':      parsed['episode'],
+        'subTitle':     parsed['subTitle'],
+        'displayTitle': parsed['displayTitle'],
+        'source':       'vhx',
+    }
 
 # ── Users (simple JSON file store) ────────────────────────────────────────────
 _users_path = os.path.join(_base, 'data', 'users.json')
@@ -659,6 +746,179 @@ def api_content():
         'product_count':    len(PRODUCTS),
         'collection_count': len(COLLECTIONS),
     })
+
+
+# ── APP CONTENT CURATOR ────────────────────────────────────────────────────────
+
+_app_content_path = os.path.join(_base, 'data', 'app-content.json')
+ADMIN_PASSWORD    = os.environ.get('ADMIN_PASSWORD', 'train4lifeadmin')
+ADMIN_API_KEY     = os.environ.get('WEBSITE_ADMIN_KEY', 'train4life-admin-sync-2026')
+
+_EMPTY_APP_CONTENT = {
+    'last_updated': '',
+    'express':      [],
+    'bible_bootcamp': [],
+}
+
+def _load_app_content():
+    if not os.path.exists(_app_content_path):
+        return dict(_EMPTY_APP_CONTENT)
+    with open(_app_content_path) as f:
+        return json.load(f)
+
+def _save_app_content(data):
+    data['last_updated'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    with open(_app_content_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def _all_curator_videos():
+    """Return combined list of all videos for curation.
+    Tries VHX API first; falls back to content.json."""
+    videos = []
+
+    # Try VHX API (fetches first 100 newest; admin can paginate if needed)
+    vhx_live = _fetch_vhx_videos(per_page=100)
+    if vhx_live:
+        seen = set()
+        for v in vhx_live:
+            entry = _vhx_video_to_curator(v)
+            if entry['id'] not in seen:
+                seen.add(entry['id'])
+                videos.append(entry)
+    else:
+        # Fallback: content.json (YouTube + VHX)
+        for v in EXPRESS_VIDEOS + REVELATION_VIDEOS:
+            thumb  = v.get('thumbnail') or f"https://img.youtube.com/vi/{v['youtube_id']}/mqdefault.jpg"
+            parsed = parse_video_title(v['title'])
+            videos.append({
+                'id': v['id'], 'title': v['title'], 'thumbnail': thumb,
+                'youtube_id': v.get('youtube_id', ''), 'vhx_url': v.get('vhx_watch_url', ''),
+                'series': parsed['series'], 'episode': parsed['episode'],
+                'subTitle': parsed['subTitle'], 'displayTitle': parsed['displayTitle'],
+                'duration': v.get('duration', ''), 'source': 'youtube',
+            })
+        for v in ALL_VHX_VIDEOS:
+            parsed = parse_video_title(v['title'])
+            videos.append({
+                'id': v['id'], 'title': v['title'], 'thumbnail': v.get('thumbnail', ''),
+                'youtube_id': '', 'vhx_url': v.get('vhx_watch_url', ''),
+                'series': parsed['series'], 'episode': parsed['episode'],
+                'subTitle': parsed['subTitle'], 'displayTitle': parsed['displayTitle'],
+                'duration': v.get('duration', ''), 'source': 'vhx',
+            })
+    return videos
+
+
+def _admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('is_admin'):
+            return redirect(url_for('admin_login', next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    error = None
+    if request.method == 'POST':
+        if request.form.get('password') == ADMIN_PASSWORD:
+            session['is_admin'] = True
+            next_url = request.args.get('next', url_for('admin_app_content'))
+            return redirect(next_url)
+        error = 'Wrong password.'
+    return render_template('admin_login.html', error=error)
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('is_admin', None)
+    return redirect(url_for('index'))
+
+
+@app.route('/admin/app-content', methods=['GET', 'POST'])
+@_admin_required
+def admin_app_content():
+    app_content = _load_app_content()
+
+    if request.method == 'POST':
+        data = request.get_json(silent=True)
+        if data:
+            # Enrich each video with parsed title fields
+            for section in ('express', 'bible_bootcamp'):
+                enriched = []
+                for v in data.get(section, []):
+                    p = parse_video_title(v.get('title') or v.get('fullTitle', ''))
+                    v.setdefault('series',       p['series'])
+                    v.setdefault('episode',      p['episode'])
+                    v.setdefault('subTitle',     p['subTitle'])
+                    v.setdefault('displayTitle', p['displayTitle'])
+                    v.setdefault('fullTitle',    p['fullTitle'])
+                    v.setdefault('sort_override', True)
+                    enriched.append(v)
+                app_content[section] = enriched
+            _save_app_content(app_content)
+            return jsonify({'success': True, 'message': 'Saved & published to app.'})
+        return jsonify({'error': 'Invalid JSON'}), 400
+
+    all_videos   = _all_curator_videos()
+    selected_ids = set(
+        [v['id'] for v in app_content.get('express', [])]
+        + [v['id'] for v in app_content.get('bible_bootcamp', [])]
+    )
+    return render_template('admin_app_content.html',
+                           all_videos=all_videos,
+                           app_content=app_content,
+                           selected_ids=selected_ids)
+
+
+@app.route('/api/app-content', methods=['GET'])
+def api_app_content():
+    app_content = _load_app_content()
+    resp = jsonify(app_content)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Cache-Control'] = 'public, max-age=60'
+    return resp
+
+
+@app.route('/api/app-content/add', methods=['POST'])
+def api_app_content_add():
+    if request.headers.get('X-Admin-Key') != ADMIN_API_KEY:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data     = request.get_json(silent=True) or {}
+    section  = data.get('section', '').strip()
+    video_id = str(data.get('video_id', '')).strip()
+    title    = data.get('title', '').strip()
+    thumb    = data.get('thumbnail', '').strip()
+    vhx_url  = data.get('vhx_url', '').strip()
+
+    if section not in ('express', 'bible_bootcamp'):
+        return jsonify({'error': "section must be 'express' or 'bible_bootcamp'"}), 400
+    if not video_id or not title:
+        return jsonify({'error': 'video_id and title required'}), 400
+
+    parsed = parse_video_title(title)
+    app_content = _load_app_content()
+    existing_ids = {v['id'] for v in app_content.get(section, [])}
+    if video_id not in existing_ids:
+        order = len(app_content.get(section, [])) + 1
+        app_content.setdefault(section, []).append({
+            'id':           video_id,
+            'title':        title,
+            'thumbnail':    thumb,
+            'vhx_url':      vhx_url,
+            'order':        order,
+            'sort_override': False,
+            'series':       parsed['series'],
+            'episode':      parsed['episode'],
+            'subTitle':     parsed['subTitle'],
+            'fullTitle':    parsed['fullTitle'],
+            'displayTitle': parsed['displayTitle'],
+        })
+        _save_app_content(app_content)
+
+    return jsonify({'success': True, 'section': section, 'video_id': video_id})
 
 
 if __name__ == '__main__':
