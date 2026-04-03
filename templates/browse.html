@@ -30,18 +30,22 @@
       {% for video in results %}
       <a href="/watch/{{ video.id }}" class="card">
         <div class="card-thumb">
-          <img
-            src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
-            alt="{{ video.title }}"
-            loading="lazy"
-          >
+          {% if video.thumbnail %}
+          <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+          {% elif video.youtube_id %}
+          <img src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg" alt="{{ video.title }}" loading="lazy">
+          {% else %}
+          <div style="position:absolute;inset:0;background:#1a1a1a;"></div>
+          {% endif %}
           <div class="card-overlay">
             <div class="play-btn"></div>
           </div>
+          {% if video.duration %}
           <div class="card-duration">{{ video.duration }}</div>
+          {% endif %}
         </div>
         <div class="card-info">
-          <div class="card-series">{{ video.series }}</div>
+          <div class="card-series">{% if video.series %}{{ video.series }}{% elif video.collection_title %}{{ video.collection_title }}{% endif %}</div>
           <div class="card-title">{{ video.title }}</div>
         </div>
       </a>
@@ -51,46 +55,41 @@
   </div>
 
 {% else %}
+
   <!-- ===== CONTINUE WATCHING ===== -->
+  {% if watch_history %}
   <div class="section">
     <div class="section-header">
       <h2 class="section-title">Continue Watching</h2>
-      <a href="/browse?q=express" class="view-all">View all &rarr;</a>
     </div>
-
-    {% if session.get('logged_in') %}
     <div class="video-scroll">
-      {% for video in express_videos[:4] %}
+      {% for video in watch_history %}
       <a href="/watch/{{ video.id }}" class="card">
         <div class="card-thumb">
-          <img
-            src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
-            alt="{{ video.title }}"
-            loading="lazy"
-          >
+          {% if video.thumbnail %}
+          <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+          {% elif video.youtube_id %}
+          <img src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg" alt="{{ video.title }}" loading="lazy">
+          {% else %}
+          <div style="position:absolute;inset:0;background:#1a1a1a;"></div>
+          {% endif %}
           <div class="card-overlay">
             <div class="play-btn"></div>
           </div>
+          {% if video.duration %}
           <div class="card-duration">{{ video.duration }}</div>
-        </div>
-        <div class="progress-bar-wrap">
-          <div class="progress-bar-fill" style="width:{{ [20, 55, 80, 35][loop.index0] }}%;"></div>
+          {% endif %}
         </div>
         <div class="card-info">
-          <div class="card-series">{{ video.series }}</div>
+          <div class="card-series">{% if video.series %}{{ video.series }}{% elif video.collection_title %}{{ video.collection_title }}{% endif %}</div>
           <div class="card-title">{{ video.title }}</div>
         </div>
       </a>
       {% endfor %}
     </div>
-    {% else %}
-    <div class="placeholder-box">
-      <span>&#128274;</span> <a href="/login">Sign in</a> to track your progress and pick up where you left off.
-    </div>
-    {% endif %}
   </div>
-
   <div class="teal-line"></div>
+  {% endif %}
 
   <!-- ===== EXPRESS 2026 ===== -->
   <div style="background:#0f0f0f; padding:2.5rem 0;">
@@ -100,7 +99,7 @@
           <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.3rem;">Series</div>
           <h2 class="section-title">2026 EXPRESS: A Year Of 10-Minute Workouts</h2>
         </div>
-        <a href="/browse?q=express" class="view-all">View all 26 &rarr;</a>
+        <a href="/browse?q=express" class="view-all">View all {{ express_videos|length }} &rarr;</a>
       </div>
       <p style="color:rgba(255,255,255,0.45); font-size:0.85rem; margin-bottom:1.2rem;">Daily 10-minute Express workouts designed to keep you moving every single day of 2026.</p>
 
@@ -108,11 +107,7 @@
         {% for video in express_videos %}
         <a href="/watch/{{ video.id }}" class="card">
           <div class="card-thumb">
-            <img
-              src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
-              alt="{{ video.title }}"
-              loading="lazy"
-            >
+            <img src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg" alt="{{ video.title }}" loading="lazy">
             <div class="card-overlay">
               <div class="play-btn"></div>
             </div>
@@ -138,7 +133,7 @@
           <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.3rem;">Bible Study Series</div>
           <h2 class="section-title">REVELATION: Verse-By-Verse Breakdown</h2>
         </div>
-        <a href="/browse?q=revelation" class="view-all">View all 11 &rarr;</a>
+        <a href="/browse?q=revelation" class="view-all">View all {{ revelation_videos|length }} &rarr;</a>
       </div>
       <p style="color:rgba(255,255,255,0.45); font-size:0.85rem; margin-bottom:1.2rem;">A deep, engaging verse-by-verse walk through the most prophetic book of the Bible.</p>
 
@@ -146,11 +141,7 @@
         {% for video in revelation_videos %}
         <a href="/watch/{{ video.id }}" class="card">
           <div class="card-thumb">
-            <img
-              src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
-              alt="{{ video.title }}"
-              loading="lazy"
-            >
+            <img src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg" alt="{{ video.title }}" loading="lazy">
             <div class="card-overlay">
               <div class="play-btn"></div>
             </div>
@@ -168,23 +159,53 @@
 
   <div class="teal-line"></div>
 
-  <!-- ===== MY LIST ===== -->
-  <div class="section">
-    <div class="section-header">
-      <h2 class="section-title">My List</h2>
-    </div>
-    {% if session.get('logged_in') %}
-    <div class="placeholder-box">
-      You haven't saved any videos yet. Browse content and click the bookmark icon to add videos here.
-    </div>
-    {% else %}
-    <div class="placeholder-box">
-      <a href="/login">Sign in</a> to save videos to your list and access them quickly.
-    </div>
-    {% endif %}
-  </div>
+  <!-- ===== VHX COLLECTION ROWS ===== -->
+  {% for cid, collection, videos in collection_rows %}
+  <div style="{% if loop.index is odd %}background:#0f0f0f;{% endif %} padding:2.5rem 0;">
+    <div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+      <div class="section-header">
+        <div>
+          <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.3rem;">Collection</div>
+          <h2 class="section-title">{{ collection.title }}</h2>
+        </div>
+        {% if videos|length > 6 %}
+        <a href="/browse?q={{ collection.title|urlencode }}" class="view-all">View all {{ videos|length }} &rarr;</a>
+        {% endif %}
+      </div>
 
-  <div class="teal-line"></div>
+      <div class="video-scroll">
+        {% for video in videos[:12] %}
+        <a href="/watch/{{ video.id }}" class="card">
+          <div class="card-thumb">
+            {% if video.thumbnail %}
+            <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+            {% else %}
+            <div style="position:absolute;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;">
+              <div style="width:40px;height:40px;background:rgba(34,185,176,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                <div style="border-left:14px solid rgba(255,255,255,0.6);border-top:8px solid transparent;border-bottom:8px solid transparent;margin-left:3px;"></div>
+              </div>
+            </div>
+            {% endif %}
+            <div class="card-overlay">
+              <div class="play-btn"></div>
+            </div>
+            {% if video.duration %}
+            <div class="card-duration">{{ video.duration }}</div>
+            {% endif %}
+          </div>
+          <div class="card-info">
+            <div class="card-series">{{ collection.title }}</div>
+            <div class="card-title">{{ video.title }}</div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% if not loop.last %}<div class="teal-line"></div>{% endif %}
+  {% endfor %}
+
+  {% if collection_rows %}<div class="teal-line"></div>{% endif %}
 
   <!-- ===== TITLES AVAILABLE FOR PURCHASE ===== -->
   <div style="background:#0f0f0f; padding:2.5rem 0 3rem;">
@@ -197,34 +218,22 @@
         <a href="/programs" class="view-all">See all programs &rarr;</a>
       </div>
 
-      {% set program_icons = ['🏋️', '🔥', '💪', '🥗', '⚡', '🎯', '🧘', '🏃'] %}
-      <div class="programs-grid">
-        {% for program in express_videos[:8] %}
-        {# We use express_videos just to count; programs come from context #}
-        {% endfor %}
-        {# Actually render first 8 programs — passed via reveal from browse route indirectly #}
-      </div>
-
-      <!-- Inline program mini-grid using hardcoded first 8 items rendered as cards -->
       <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:1rem;">
-        {% set prog_data = [
-          {"title":"Foundation To Fire","count":6,"icon":"🔥"},
-          {"title":"Post-Super Bowl Shred 26","count":8,"icon":"🏃"},
-          {"title":"Tighter Tummy In 10 Days","count":8,"icon":"💪"},
-          {"title":"The Jingle Bell Challenge","count":29,"icon":"🎯"},
-          {"title":"X1 Bodyweight","count":1,"icon":"⚡"},
-          {"title":"The Ultimate Core & Cardio Trainer","count":10,"icon":"🏋️"},
-          {"title":"28-Day Pre-Holiday Sizzle","count":6,"icon":"🌟"},
-          {"title":"Strength Academy 2024 October","count":9,"icon":"🥊"},
-        ] %}
-        {% for p in prog_data %}
-        <a href="/programs" class="program-card">
+        {% for program in programs[:8] %}
+        <a href="/programs/{{ program.id }}" class="program-card">
           <div class="program-thumb">
-            <span class="program-thumb-icon">{{ p.icon }}</span>
+            {% if program.thumbnail %}
+            <img src="{{ program.thumbnail }}" alt="{{ program.title }}" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;">
+            {% else %}
+            <span class="program-thumb-icon">🔥</span>
+            {% endif %}
           </div>
           <div class="program-info">
-            <div class="program-title">{{ p.title }}</div>
-            <div class="program-count">{{ p.count }} video{% if p.count != 1 %}s{% endif %}</div>
+            <div class="program-title">{{ program.title }}</div>
+            <div class="program-count">{{ program.video_count }} video{% if program.video_count != 1 %}s{% endif %}</div>
+            {% if program.price %}
+            <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; margin-top:3px;">{{ program.price }}</div>
+            {% endif %}
           </div>
         </a>
         {% endfor %}

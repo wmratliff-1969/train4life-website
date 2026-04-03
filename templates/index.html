@@ -84,6 +84,44 @@
   </div>
 </div>
 
+<!-- ===== REVELATION SECTION ===== -->
+<div style="padding:3rem 0 2rem;">
+  <div style="max-width:1400px; margin:0 auto; padding:0 2rem;">
+    <div class="section-header">
+      <div>
+        <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.4rem;">Bible Study Series</div>
+        <h2 style="font-size:clamp(1.3rem,3vw,1.9rem); font-weight:700; letter-spacing:1px;">REVELATION</h2>
+      </div>
+      <a href="/browse?q=revelation" class="view-all">View all 11 &rarr;</a>
+    </div>
+    <p style="color:rgba(255,255,255,0.5); font-size:0.9rem; margin-bottom:1.5rem;">A verse-by-verse deep dive into the most prophetic book of the Bible.</p>
+
+    <div class="video-scroll">
+      {% for video in revelation_videos %}
+      <a href="/watch/{{ video.id }}" class="card">
+        <div class="card-thumb">
+          <img
+            src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg"
+            alt="{{ video.title }}"
+            loading="lazy"
+          >
+          <div class="card-overlay">
+            <div class="play-btn"></div>
+          </div>
+          <div class="card-duration">{{ video.duration }}</div>
+        </div>
+        <div class="card-info">
+          <div class="card-series">{{ video.series }}</div>
+          <div class="card-title">{{ video.title }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="teal-line"></div>
+
 <!-- ===== DIVIDER BANNER ===== -->
 <div class="divider-banner">
   <h2>Watch from anywhere</h2>

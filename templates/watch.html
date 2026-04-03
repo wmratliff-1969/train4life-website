@@ -7,12 +7,21 @@
 <div style="background:#000; border-bottom:1px solid rgba(255,255,255,0.06);">
   <div style="max-width:1100px; margin:0 auto; padding:1.5rem 2rem 0;">
     <div class="player-wrap">
+      {% if player == 'vhx' %}
+      <iframe
+        src="https://embed.vhx.tv/videos/{{ video.vhx_video_id }}?autoplay=1&color=22b9b0"
+        title="{{ video.title }}"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+      ></iframe>
+      {% else %}
       <iframe
         src="https://www.youtube.com/embed/{{ video.youtube_id }}?autoplay=1&rel=0&modestbranding=1&color=white"
         title="{{ video.title }}"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen
       ></iframe>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -20,8 +29,19 @@
 <!-- ===== VIDEO META ===== -->
 <div class="watch-container">
   <div class="watch-meta">
-    <div class="watch-series-badge">{{ video.series }}</div>
+    <a href="/browse" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:rgba(255,255,255,0.4); margin-bottom:1rem; transition:color 0.2s;"
+       onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+      &larr; Back to Browse
+    </a>
+
+    <div class="watch-series-badge">
+      {% if video.series %}{{ video.series }}{% elif video.collection_title %}{{ video.collection_title }}{% else %}TRAIN4LIFE{% endif %}
+    </div>
     <h1 class="watch-title">{{ video.title }}</h1>
+
+    {% if video.description %}
+    <p class="watch-desc">{{ video.description }}</p>
+    {% elif player == 'youtube' %}
     <p class="watch-desc">
       {% if video.series == 'EXPRESS 2026' %}
         A focused 10-minute Express workout designed to keep you moving, build strength, and maintain momentum — no matter how busy life gets. Just 10 minutes a day can transform your health.
@@ -29,12 +49,18 @@
         A verse-by-verse deep dive into the book of Revelation. Join us as we unpack the prophecy, symbolism, and life-changing truths hidden inside the most misunderstood book of the Bible.
       {% endif %}
     </p>
+    {% endif %}
 
     <div style="display:flex; align-items:center; gap:1rem; margin-top:1rem; flex-wrap:wrap;">
+      {% if video.duration %}
       <span style="font-size:0.82rem; color:rgba(255,255,255,0.4);">&#9679; {{ video.duration }}</span>
+      {% endif %}
       <span style="font-size:0.82rem; color:rgba(255,255,255,0.4);">&#9679; HD</span>
-      {% if not session.get('logged_in') %}
-      <a href="/subscribe" class="btn-teal" style="margin-left:auto;">Subscribe for Full Access</a>
+      {% if player == 'vhx' and video.vhx_watch_url %}
+      <a href="{{ video.vhx_watch_url }}" target="_blank" style="font-size:0.82rem; color:rgba(255,255,255,0.4); transition:color 0.2s;"
+         onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+        Open on VHX &rarr;
+      </a>
       {% endif %}
     </div>
   </div>
@@ -42,6 +68,7 @@
   <div class="teal-line"></div>
 
   <!-- ===== UP NEXT ===== -->
+  {% if related %}
   <div style="margin-top:2rem;">
     <div class="section-header" style="margin-bottom:1rem;">
       <h2 class="section-title">Up Next</h2>
@@ -52,30 +79,39 @@
       {% for v in related %}
       <a href="/watch/{{ v.id }}" class="card">
         <div class="card-thumb">
-          <img
-            src="https://img.youtube.com/vi/{{ v.youtube_id }}/mqdefault.jpg"
-            alt="{{ v.title }}"
-            loading="lazy"
-          >
+          {% if v.thumbnail %}
+          <img src="{{ v.thumbnail }}" alt="{{ v.title }}" loading="lazy">
+          {% elif v.youtube_id %}
+          <img src="https://img.youtube.com/vi/{{ v.youtube_id }}/mqdefault.jpg" alt="{{ v.title }}" loading="lazy">
+          {% else %}
+          <div style="position:absolute;inset:0;background:#1a1a1a;display:flex;align-items:center;justify-content:center;">
+            <div class="play-btn" style="opacity:0.3;"></div>
+          </div>
+          {% endif %}
           <div class="card-overlay">
             <div class="play-btn"></div>
           </div>
+          {% if v.duration %}
           <div class="card-duration">{{ v.duration }}</div>
+          {% endif %}
         </div>
         <div class="card-info">
-          <div class="card-series">{{ v.series }}</div>
+          <div class="card-series">{% if v.series %}{{ v.series }}{% elif v.collection_title %}{{ v.collection_title }}{% endif %}</div>
           <div class="card-title">{{ v.title }}</div>
         </div>
       </a>
       {% endfor %}
     </div>
   </div>
+  {% endif %}
 
   <!-- ===== SERIES BREADCRUMB ===== -->
   <div style="margin-top:2.5rem; padding-top:2rem; border-top:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
     <div>
       <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.25rem;">Part of the series</div>
-      <div style="font-size:1rem; font-weight:700; color:#22b9b0;">{{ video.series }}</div>
+      <div style="font-size:1rem; font-weight:700; color:#22b9b0;">
+        {% if video.series %}{{ video.series }}{% elif video.collection_title %}{{ video.collection_title }}{% else %}TRAIN4LIFE{% endif %}
+      </div>
     </div>
     <a href="/browse" class="btn-outline" style="margin-left:auto;">Browse Series &rarr;</a>
   </div>

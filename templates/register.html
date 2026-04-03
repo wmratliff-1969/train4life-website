@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Sign In — TRAIN4LIFE{% endblock %}
+{% block title %}Create Account — TRAIN4LIFE{% endblock %}
 
 {% block content %}
 
@@ -12,8 +12,8 @@
       </a>
     </div>
 
-    <h1>Sign In</h1>
-    <p class="auth-sub">Welcome back. Stream your workouts &amp; teachings.</p>
+    <h1>Create Account</h1>
+    <p class="auth-sub">Start your faith &amp; fitness journey today.</p>
 
     {% if error %}
     <div style="background:rgba(220,50,50,0.15); border:1px solid rgba(220,50,50,0.3); border-radius:6px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.88rem; color:#ff7b7b;">
@@ -21,8 +21,19 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="/login">
-      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <form method="POST" action="/register">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          placeholder="Your name"
+          required
+          autocomplete="name"
+        >
+      </div>
+
       <div class="form-group">
         <label for="email">Email Address</label>
         <input
@@ -41,29 +52,23 @@
           type="password"
           id="password"
           name="password"
-          placeholder="••••••••"
+          placeholder="At least 6 characters"
           required
-          autocomplete="current-password"
+          autocomplete="new-password"
+          minlength="6"
         >
       </div>
 
-      <div style="text-align:right; margin-bottom:1rem; margin-top:-0.25rem;">
-        <a href="#" style="font-size:0.8rem; color:rgba(255,255,255,0.4); transition:color 0.2s;"
-           onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
-          Forgot password?
-        </a>
-      </div>
-
-      <button type="submit" class="btn-teal btn-full">Sign In</button>
+      <button type="submit" class="btn-teal btn-full">Create Account</button>
     </form>
 
     <div class="auth-footer">
-      New here? <a href="/register">Create an account</a> &bull; <a href="/subscribe">Subscribe</a>
+      Already have an account? <a href="/login">Sign in</a>
     </div>
 
     <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid rgba(255,255,255,0.07); text-align:center;">
       <p style="font-size:0.78rem; color:rgba(255,255,255,0.25); line-height:1.5;">
-        By signing in, you agree to our
+        By creating an account, you agree to our
         <a href="#" style="color:rgba(255,255,255,0.35);">Terms of Service</a>
         and <a href="#" style="color:rgba(255,255,255,0.35);">Privacy Policy</a>.
       </p>

@@ -50,7 +50,7 @@
       {% if video.duration %}
       <div style="color:rgba(255,255,255,0.35); font-size:0.8rem; flex-shrink:0;">{{ video.duration }}</div>
       {% endif %}
-      <a href="https://train4life.vhx.tv{{ video.vhx_path }}" target="_blank"
+      <a href="/watch/{{ video.id }}"
          style="font-size:0.78rem; color:#22b9b0; white-space:nowrap; flex-shrink:0;">Watch &rarr;</a>
     </div>
     {% else %}

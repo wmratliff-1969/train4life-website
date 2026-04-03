@@ -6,9 +6,14 @@
 <div class="account-wrap">
 
   <!-- PAGE HEADER -->
-  <div style="margin-bottom:2rem;">
-    <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.4rem;">Account</div>
-    <h1 style="font-size:1.8rem; font-weight:700;">My Account</h1>
+  <div style="margin-bottom:2rem; display:flex; align-items:center; gap:1.25rem;">
+    <div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#22b9b0,#2f8c78); display:flex; align-items:center; justify-content:center; font-size:1.4rem; font-weight:700; flex-shrink:0;">
+      {{ (user.name or session.get('user_name', '?'))[0]|upper }}
+    </div>
+    <div>
+      <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.2rem;">Account</div>
+      <h1 style="font-size:1.6rem; font-weight:700;">{{ user.name or session.get('user_name', 'Member') }}</h1>
+    </div>
   </div>
 
   <!-- ACCOUNT INFO CARD -->
@@ -16,13 +21,24 @@
     <h2>Account Information</h2>
 
     <div class="account-row">
+      <span class="account-label">Name</span>
+      <span class="account-value">{{ user.name or '—' }}</span>
+    </div>
+
+    <div class="account-row">
       <span class="account-label">Email</span>
-      <span class="account-value">{{ session.get('user_email', 'member@train4life.com') }}</span>
+      <span class="account-value">{{ user.email or session.get('user_email', '—') }}</span>
     </div>
 
     <div class="account-row">
       <span class="account-label">Member Since</span>
-      <span class="account-value">January 2026</span>
+      <span class="account-value">
+        {% if user.created_at %}
+          {{ user.created_at[:10] }}
+        {% else %}
+          —
+        {% endif %}
+      </span>
     </div>
 
     <div class="account-row">
@@ -37,29 +53,22 @@
   <div class="account-card">
     <h2>Subscription</h2>
 
+    {% if user.plan %}
     <div class="account-row">
       <span class="account-label">Current Plan</span>
-      <span class="account-value" style="color:#22b9b0; font-weight:700;">All Access Annual</span>
+      <span class="account-value" style="color:#22b9b0; font-weight:700;">{{ user.plan }}</span>
     </div>
-
-    <div class="account-row">
-      <span class="account-label">Billing</span>
-      <span class="account-value">$55.00 / year</span>
+    {% else %}
+    <div style="text-align:center; padding:1.5rem 0;">
+      <p style="color:rgba(255,255,255,0.45); font-size:0.9rem; margin-bottom:1.25rem;">No active subscription. Subscribe to unlock the full library.</p>
+      <a href="/subscribe" class="btn-teal">View Plans &rarr;</a>
     </div>
-
-    <div class="account-row">
-      <span class="account-label">Next Renewal</span>
-      <span class="account-value">January 1, 2027</span>
-    </div>
-
-    <div class="account-row">
-      <span class="account-label">Payment Method</span>
-      <span class="account-value" style="color:rgba(255,255,255,0.5);">Visa ending in 4242</span>
-    </div>
+    {% endif %}
 
     <div style="margin-top:1.25rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
-      <a href="/subscribe" class="btn-teal" style="font-size:0.85rem; padding:0.5rem 1.2rem;">Manage Subscription</a>
-      <a href="#" class="btn-outline" style="font-size:0.85rem; padding:0.5rem 1.2rem;">Update Payment</a>
+      <a href="/subscribe" class="btn-teal" style="font-size:0.85rem; padding:0.5rem 1.2rem;">
+        {% if user.plan %}Manage Subscription{% else %}Subscribe Now{% endif %}
+      </a>
     </div>
   </div>
 

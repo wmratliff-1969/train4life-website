@@ -1029,8 +1029,11 @@
       background: #22b9b0;
     }
 
+    .hide-mobile { display: inline; }
+
     /* ===== MOBILE ===== */
     @media (max-width: 768px) {
+      .hide-mobile { display: none; }
       .hamburger {
         display: flex;
       }
@@ -1103,8 +1106,14 @@
 
       <div class="nav-right">
         {% if session.get('logged_in') %}
-          <a href="/account" class="btn-outline">Account</a>
-          <a href="/logout" class="btn-teal">Sign Out</a>
+          <a href="/account" style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:600; color:rgba(255,255,255,0.75); transition:color 0.2s;"
+             onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.75)'">
+            <span style="width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#22b9b0,#2f8c78); display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:700; color:#fff; flex-shrink:0;">
+              {{ session.get('user_name', 'M')[0]|upper }}
+            </span>
+            <span class="hide-mobile">{{ session.get('user_name', 'Account') }}</span>
+          </a>
+          <a href="/logout" class="btn-outline" style="font-size:0.82rem; padding:0.35rem 0.9rem;">Sign Out</a>
         {% else %}
           <a href="/login" class="btn-outline">Sign In</a>
           <a href="/subscribe" class="btn-teal">Subscribe</a>
