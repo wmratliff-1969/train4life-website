@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ video.title }} — TRAIN4LIFE{% endblock %}
+{% block meta_description %}Watch {{ video.title }} on TRAIN4LIFE — faith-based fitness and Bible study streaming.{% endblock %}
+{% block og_title %}{{ video.title }} — TRAIN4LIFE{% endblock %}
+{% block og_description %}{{ video.description[:150] if video.description else 'Watch ' + video.title + ' on TRAIN4LIFE.' }}{% endblock %}
+{% block og_image %}{% if video.thumbnail %}{{ video.thumbnail }}{% elif video.youtube_id %}https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg{% else %}/static/images/hero-bg.jpg{% endif %}{% endblock %}
 
 {% block content %}
 

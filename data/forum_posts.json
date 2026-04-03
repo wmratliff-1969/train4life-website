@@ -1,0 +1,82 @@
+[
+  {
+    "id": "1",
+    "title": "Welcome to the TRAIN4LIFE Community Forum!",
+    "body": "Hey everyone! Welcome to the official TRAIN4LIFE community forum. This is a place to share your fitness journey, ask questions, encourage each other, and discuss the Bible studies.\n\nFeel free to introduce yourself and let us know what brought you to TRAIN4LIFE. We're all on this journey together — faith, fitness, and culture!",
+    "category": "General",
+    "author_name": "TRAIN4LIFE Team",
+    "author_email": "admin@train4life.com",
+    "created_at": "2026-01-01T12:00:00+00:00",
+    "replies": [
+      {
+        "body": "So excited to be here! Started the Express workouts this week and already feeling the difference. 10 minutes really does make a difference when you're consistent!",
+        "author_name": "Sarah M.",
+        "author_email": "",
+        "created_at": "2026-01-02T09:15:00+00:00"
+      },
+      {
+        "body": "Just found TRAIN4LIFE through a friend. The Revelation series is incredible — finally a breakdown that makes sense of that book!",
+        "author_name": "James K.",
+        "author_email": "",
+        "created_at": "2026-01-03T14:30:00+00:00"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "title": "Tips for staying consistent with the Express workouts?",
+    "body": "I've been doing the EXPRESS 2026 workouts and love them, but I struggle to stay consistent. Anyone have tips for building the habit? I keep missing days and feel like I'm always starting over.",
+    "category": "Workouts",
+    "author_name": "Mike T.",
+    "author_email": "",
+    "created_at": "2026-01-15T08:00:00+00:00",
+    "replies": [
+      {
+        "body": "I do mine right when I wake up before even looking at my phone. Once it becomes part of the morning routine it gets so much easier!",
+        "author_name": "Lisa R.",
+        "author_email": "",
+        "created_at": "2026-01-15T10:45:00+00:00"
+      },
+      {
+        "body": "Put it on your calendar like a meeting you can't cancel. It's only 10 minutes — that's less time than most meetings you attend!",
+        "author_name": "David P.",
+        "author_email": "",
+        "created_at": "2026-01-16T07:20:00+00:00"
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "title": "The Revelation series is blowing my mind",
+    "body": "I just finished Episode 4 on the Mystery of the Seven Spirits and I had to come here and talk about it. I've read Revelation many times but never had it broken down this way. The historical context is everything!\n\nAnyone else watching this series? What episode are you on?",
+    "category": "Bible Study",
+    "author_name": "Rachel H.",
+    "author_email": "",
+    "created_at": "2026-02-03T19:00:00+00:00",
+    "replies": [
+      {
+        "body": "On episode 7 right now. The letters to the seven churches are so applicable to today's church — it's like reading current events.",
+        "author_name": "Thomas W.",
+        "author_email": "",
+        "created_at": "2026-02-04T11:30:00+00:00"
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "title": "Nutrition tips to pair with the workouts?",
+    "body": "The Express workouts are great but I know results are mostly made in the kitchen. What are you all eating to complement the workouts? Looking for simple, practical tips that don't require a nutrition degree.",
+    "category": "Nutrition",
+    "author_name": "Amanda S.",
+    "author_email": "",
+    "created_at": "2026-02-20T13:00:00+00:00",
+    "replies": [
+      {
+        "body": "Protein at every meal. That simple change made the biggest difference for me. Eggs in the morning, chicken or fish at lunch and dinner. Keep it simple.",
+        "author_name": "Chris B.",
+        "author_email": "",
+        "created_at": "2026-02-21T08:45:00+00:00"
+      }
+    ]
+  }
+]

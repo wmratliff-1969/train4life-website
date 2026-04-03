@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{% if query %}{{ query }} — Search{% else %}Search{% endif %} — TRAIN4LIFE{% endblock %}
+{% block meta_description %}Search results for "{{ query }}" on TRAIN4LIFE — faith-based fitness videos and Bible studies.{% endblock %}
+
+{% block content %}
+
+<div style="max-width:1400px; margin:0 auto; padding:2rem 2rem 1rem;">
+  <form action="/search" method="GET" style="display:flex; gap:0.75rem; margin-bottom:2rem;">
+    <input
+      type="text"
+      name="q"
+      value="{{ query }}"
+      placeholder="Search videos, series, workouts..."
+      autocomplete="off"
+      style="flex:1; background:#1e1e1e; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.75rem 1rem; color:#fff; font-family:'Cabin',sans-serif; font-size:1rem; outline:none; transition:border-color 0.2s;"
+      onfocus="this.style.borderColor='#22b9b0'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'"
+    >
+    <button type="submit" class="btn-teal" style="padding:0 1.4rem; border:none; cursor:pointer; font-family:'Cabin',sans-serif; font-size:0.95rem;">Search</button>
+  </form>
+
+  {% if query %}
+  <div style="font-size:0.88rem; color:rgba(255,255,255,0.4); margin-bottom:1.5rem;">
+    {% if results %}
+      <span style="color:#22b9b0; font-weight:700;">{{ results|length }}</span> result{% if results|length != 1 %}s{% endif %} for "<span style="color:#fff;">{{ query }}</span>"
+    {% else %}
+      No results for "<span style="color:#fff;">{{ query }}</span>" — try a different search.
+    {% endif %}
+  </div>
+
+  {% if results %}
+  <div class="video-row" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+    {% for video in results %}
+    <a href="/watch/{{ video.id }}" class="card">
+      <div class="card-thumb">
+        {% if video.thumbnail %}
+        <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+        {% elif video.youtube_id %}
+        <img src="https://img.youtube.com/vi/{{ video.youtube_id }}/mqdefault.jpg" alt="{{ video.title }}" loading="lazy">
+        {% else %}
+        <div style="position:absolute;inset:0;background:#1a1a1a;"></div>
+        {% endif %}
+        <div class="card-overlay"><div class="play-btn"></div></div>
+        {% if video.duration %}
+        <div class="card-duration">{{ video.duration }}</div>
+        {% endif %}
+      </div>
+      <div class="card-info">
+        <div class="card-series">{% if video.series %}{{ video.series }}{% elif video.collection_title %}{{ video.collection_title }}{% endif %}</div>
+        <div class="card-title">{{ video.title }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <!-- No query yet — show popular searches -->
+  <div>
+    <h2 style="font-size:1rem; font-weight:700; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:1px; margin-bottom:1rem;">Popular Searches</h2>
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+      {% for tag in ['Express', 'Revelation', 'Core', 'Strength', 'Cardio', 'HIIT', 'Foundation', 'Nutrition', '10 minutes', 'Bible Study'] %}
+      <a href="/search?q={{ tag }}" style="background:#1e1e1e; border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:0.5rem 1.2rem; font-size:0.9rem; color:rgba(255,255,255,0.75); transition:all 0.2s;"
+         onmouseover="this.style.borderColor='#22b9b0'; this.style.color='#22b9b0';"
+         onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='rgba(255,255,255,0.75)';">
+        {{ tag }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

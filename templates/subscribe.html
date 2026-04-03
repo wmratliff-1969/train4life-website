@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Subscribe — TRAIN4LIFE{% endblock %}
 
+{% block head_extra %}
+{% if stripe_public_key %}
+<script src="https://js.stripe.com/v3/"></script>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 
 <!-- ===== SUBSCRIBE HEADER ===== -->
@@ -29,7 +35,17 @@
       <li>New content added weekly</li>
       <li>Watch on any device</li>
     </ul>
-    <a href="/login" class="btn-teal" style="display:block; padding:0.75rem; font-size:0.95rem; text-align:center; border-radius:6px;">Subscribe Annually</a>
+    {% if session.get('logged_in') %}
+    <button id="btn-annual" onclick="startCheckout('annual')" class="btn-teal"
+            style="display:block; width:100%; padding:0.75rem; font-size:0.95rem; text-align:center; border:none; cursor:pointer; font-family:'Cabin',sans-serif; border-radius:4px;">
+      Start Annual Subscription
+    </button>
+    {% else %}
+    <a href="/login?next=/subscribe" class="btn-teal"
+       style="display:block; padding:0.75rem; font-size:0.95rem; text-align:center; border-radius:4px;">
+      Sign In to Subscribe
+    </a>
+    {% endif %}
     <div style="font-size:0.75rem; color:rgba(255,255,255,0.3); margin-top:0.75rem;">Save 34% vs monthly</div>
   </div>
 
@@ -46,7 +62,17 @@
       <li>New content added weekly</li>
       <li>Watch on any device</li>
     </ul>
-    <a href="/login" class="btn-teal" style="display:block; padding:0.75rem; font-size:0.95rem; text-align:center; border-radius:6px;">Subscribe Monthly</a>
+    {% if session.get('logged_in') %}
+    <button id="btn-monthly" onclick="startCheckout('monthly')" class="btn-teal"
+            style="display:block; width:100%; padding:0.75rem; font-size:0.95rem; text-align:center; border:none; cursor:pointer; font-family:'Cabin',sans-serif; border-radius:4px;">
+      Start Monthly Subscription
+    </button>
+    {% else %}
+    <a href="/login?next=/subscribe" class="btn-teal"
+       style="display:block; padding:0.75rem; font-size:0.95rem; text-align:center; border-radius:4px;">
+      Sign In to Subscribe
+    </a>
+    {% endif %}
     <div style="font-size:0.75rem; color:rgba(255,255,255,0.3); margin-top:0.75rem;">No commitment required</div>
   </div>
 
@@ -63,8 +89,11 @@
       <li>All content included</li>
       <li>No subscription for recipient</li>
     </ul>
-    <a href="/login" class="btn-teal" style="display:block; padding:0.75rem; font-size:0.95rem; text-align:center; border-radius:6px;">Give as Gift</a>
-    <div style="font-size:0.75rem; color:rgba(255,255,255,0.3); margin-top:0.75rem;">Makes a great present</div>
+    <a href="mailto:hello@train4life.com?subject=Gift%20Subscription" class="btn-teal"
+       style="display:block; padding:0.75rem; font-size:0.95rem; text-align:center; border-radius:4px;">
+      Give as Gift
+    </a>
+    <div style="font-size:0.75rem; color:rgba(255,255,255,0.3); margin-top:0.75rem;">Contact us to purchase</div>
   </div>
 
 </div>
@@ -72,7 +101,7 @@
 <!-- ===== SECURE NOTE ===== -->
 <div class="secure-note">
   <span>&#128274;</span>
-  <span>Secure payment &bull; SSL encrypted &bull; Cancel anytime &bull; No hidden fees</span>
+  <span>Secure payment via Stripe &bull; SSL encrypted &bull; Cancel anytime &bull; No hidden fees</span>
 </div>
 
 <!-- ===== WHAT'S INCLUDED ===== -->
@@ -115,7 +144,7 @@
       ("Can I cancel anytime?", "Yes. You can cancel your subscription at any time from your account page. You'll continue to have access until the end of your billing period."),
       ("What devices can I watch on?", "Any device with a modern web browser — desktop, laptop, smartphone, tablet, or smart TV. No app required."),
       ("Is this the same as train4life.vhx.tv?", "Yes! This is the official TRAIN4LIFE streaming platform with the same content library."),
-      ("What payment methods do you accept?", "We accept all major credit and debit cards, as well as PayPal. All payments are processed securely."),
+      ("What payment methods do you accept?", "We accept all major credit and debit cards via Stripe. All payments are processed securely with SSL encryption."),
     ] %}
     {% for q, a in faqs %}
     <div style="padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.06);">
@@ -125,5 +154,40 @@
     {% endfor %}
   </div>
 </div>
+
+<script>
+{% if stripe_public_key %}
+const stripeInstance = Stripe('{{ stripe_public_key }}');
+{% endif %}
+
+async function startCheckout(plan) {
+  const btn = document.getElementById('btn-' + plan);
+  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+
+  {% if stripe_public_key %}
+  try {
+    const res = await fetch('/create-checkout-session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({plan})
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert('Unable to start checkout: ' + (data.error || 'Unknown error'));
+      if (btn) { btn.textContent = plan === 'annual' ? 'Start Annual Subscription' : 'Start Monthly Subscription'; btn.disabled = false; }
+    }
+  } catch(e) {
+    alert('Unable to start checkout. Please try again.');
+    if (btn) { btn.textContent = plan === 'annual' ? 'Start Annual Subscription' : 'Start Monthly Subscription'; btn.disabled = false; }
+  }
+  {% else %}
+  // Stripe not configured — contact admin
+  alert('Payment processing is being set up. Please check back soon or contact support.');
+  if (btn) { btn.textContent = plan === 'annual' ? 'Start Annual Subscription' : 'Start Monthly Subscription'; btn.disabled = false; }
+  {% endif %}
+}
+</script>
 
 {% endblock %}

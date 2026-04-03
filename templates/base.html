@@ -4,9 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}TRAIN4LIFE{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}TRAIN4LIFE — Faith, Fitness & Culture. Stream 400+ workouts, Bible studies, and challenge programs. Watch anytime on any device.{% endblock %}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="TRAIN4LIFE">
+  <meta property="og:title" content="{% block og_title %}TRAIN4LIFE — Faith, Fitness & Culture{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Stream 400+ faith-based fitness videos, Bible studies, and challenge programs. $6.99/month or $55/year.{% endblock %}">
+  <meta property="og:image" content="{% block og_image %}/static/images/hero-bg.jpg{% endblock %}">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@400;500;600;700&display=swap" rel="stylesheet">
+  {% block head_extra %}{% endblock %}
   <style>
     :root {
       --bg: #141414;
@@ -1031,6 +1039,21 @@
 
     .hide-mobile { display: inline; }
 
+    /* ===== LOCK BADGE ===== */
+    .card-lock {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.75);
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 0.68rem;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      color: rgba(255,255,255,0.8);
+    }
+
     /* ===== MOBILE ===== */
     @media (max-width: 768px) {
       .hide-mobile { display: none; }
@@ -1085,6 +1108,38 @@
       .search-bar {
         padding: 1rem 1rem 0;
       }
+
+      .plans {
+        grid-template-columns: 1fr;
+        padding: 1.5rem 1rem;
+      }
+
+      .programs-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      }
+
+      .account-wrap {
+        margin: 1.5rem auto;
+        padding: 0 1rem;
+      }
+
+      .hero-content {
+        padding: 3rem 1.5rem 2.5rem;
+      }
+
+      .hero h1 {
+        font-size: clamp(2.2rem, 12vw, 4rem);
+        letter-spacing: 3px;
+      }
+
+      .nav-inner {
+        padding: 0 1rem;
+        gap: 1rem;
+      }
+
+      .section {
+        padding: 1.5rem 1rem;
+      }
     }
 
     /* ===== MAIN GROWS ===== */
@@ -1101,7 +1156,7 @@
       <ul class="nav-links" id="navLinks">
         <li><a href="/browse">Browse</a></li>
         <li><a href="/forum">Forums</a></li>
-        <li><a href="#" id="search-nav-toggle">Search</a></li>
+        <li><a href="#" id="search-nav-toggle" onclick="openSearch(event)">Search</a></li>
       </ul>
 
       <div class="nav-right">
@@ -1144,12 +1199,95 @@
     <div class="footer-copy">&copy; 2026 TRAIN4LIFE. All rights reserved.</div>
   </footer>
 
+  <!-- ===== SEARCH OVERLAY ===== -->
+  <div id="search-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1000; padding:2rem; overflow-y:auto;">
+    <div style="max-width:700px; margin:0 auto;">
+      <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem;">
+        <form action="/search" method="GET" style="flex:1; display:flex; gap:0.75rem;">
+          <input id="search-overlay-input" type="text" name="q" placeholder="Search videos, series, workouts..."
+                 autocomplete="off"
+                 style="flex:1; background:#1e1e1e; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:0.85rem 1.1rem; color:#fff; font-size:1.05rem; font-family:'Cabin',sans-serif; outline:none;"
+                 oninput="liveSearch(this.value)">
+          <button type="submit" class="btn-teal" style="padding:0 1.4rem; border:none; cursor:pointer; font-family:'Cabin',sans-serif; font-size:0.95rem;">Search</button>
+        </form>
+        <button onclick="closeSearch()" style="background:none; border:none; color:rgba(255,255,255,0.5); font-size:1.5rem; cursor:pointer; padding:0.25rem 0.5rem; line-height:1;">&times;</button>
+      </div>
+
+      <div id="search-suggestions" style="display:none;">
+        <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.75rem;">Suggestions</div>
+        <div id="suggestions-list"></div>
+      </div>
+
+      <div style="margin-top:1.5rem;">
+        <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.75rem;">Popular</div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+          {% for tag in ['Express', 'Revelation', 'Core', 'Strength', 'Cardio', 'HIIT', 'Foundation'] %}
+          <a href="/search?q={{ tag }}" style="background:#1e1e1e; border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:0.35rem 0.9rem; font-size:0.82rem; color:rgba(255,255,255,0.7); transition:all 0.2s;"
+             onmouseover="this.style.borderColor='#22b9b0'; this.style.color='#22b9b0';"
+             onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='rgba(255,255,255,0.7)';">
+            {{ tag }}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // ── Hamburger ──
     const hamburger = document.getElementById('hamburger');
     const navLinks = document.getElementById('navLinks');
     hamburger.addEventListener('click', () => {
       navLinks.classList.toggle('open');
     });
+    // Close nav when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!hamburger.contains(e.target) && !navLinks.contains(e.target)) {
+        navLinks.classList.remove('open');
+      }
+    });
+
+    // ── Search overlay ──
+    function openSearch(e) {
+      if (e) e.preventDefault();
+      document.getElementById('search-overlay').style.display = 'block';
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => document.getElementById('search-overlay-input').focus(), 50);
+    }
+    function closeSearch() {
+      document.getElementById('search-overlay').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeSearch();
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+    });
+
+    // ── Live search suggestions ──
+    let _searchTimer;
+    async function liveSearch(q) {
+      clearTimeout(_searchTimer);
+      const box = document.getElementById('search-suggestions');
+      if (q.length < 2) { box.style.display = 'none'; return; }
+      _searchTimer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+          const data = await res.json();
+          const list = document.getElementById('suggestions-list');
+          if (!data.length) { box.style.display = 'none'; return; }
+          list.innerHTML = data.map(v => `
+            <a href="/watch/${v.id}" onclick="closeSearch()" style="display:flex; align-items:center; gap:0.75rem; padding:0.6rem 0; border-bottom:1px solid rgba(255,255,255,0.06); color:#fff; text-decoration:none;">
+              ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:64px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;" loading="lazy">` : '<div style="width:64px;height:36px;background:#1a1a1a;border-radius:4px;flex-shrink:0;"></div>'}
+              <div>
+                <div style="font-weight:600;font-size:0.88rem;">${v.title}</div>
+                ${v.series ? `<div style="font-size:0.75rem;color:#22b9b0;">${v.series}</div>` : ''}
+              </div>
+            </a>
+          `).join('');
+          box.style.display = 'block';
+        } catch(e) {}
+      }, 250);
+    }
   </script>
 </body>
 </html>

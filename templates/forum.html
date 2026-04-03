@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Forum — TRAIN4LIFE Community{% endblock %}
+{% block meta_description %}Join the TRAIN4LIFE community. Share your faith, fitness journey, workout tips, and Bible study insights.{% endblock %}
+
+{% block content %}
+
+<!-- ===== HEADER ===== -->
+<div style="background:linear-gradient(135deg,#0a1a1a,#0f2420); border-bottom:1px solid rgba(34,185,176,0.15); padding:2.5rem 2rem 2rem;">
+  <div style="max-width:1100px; margin:0 auto; display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:3px; margin-bottom:0.5rem;">Community</div>
+      <h1 style="font-size:clamp(1.6rem,3.5vw,2.2rem); font-weight:700; letter-spacing:1px;">TRAIN4LIFE Forum</h1>
+      <p style="color:rgba(255,255,255,0.5); margin-top:0.4rem; font-size:0.9rem;">Share your journey, ask questions, encourage others.</p>
+    </div>
+    {% if session.get('logged_in') %}
+    <a href="/forum/new" class="btn-teal" style="white-space:nowrap;">+ New Post</a>
+    {% else %}
+    <a href="/login?next=/forum/new" class="btn-teal" style="white-space:nowrap;">Sign In to Post</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ===== CATEGORIES ===== -->
+<div style="background:#0f0f0f; border-bottom:1px solid rgba(255,255,255,0.06); overflow-x:auto;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 2rem; display:flex; gap:0; white-space:nowrap;">
+    <a href="/forum" style="padding:0.9rem 1.25rem; font-size:0.85rem; font-weight:600; border-bottom:2px solid {% if not active_category %}#22b9b0{% else %}transparent{% endif %}; color:{% if not active_category %}#22b9b0{% else %}rgba(255,255,255,0.5){% endif %}; transition:color 0.2s;">
+      All Posts
+    </a>
+    {% for cat in categories %}
+    <a href="/forum?cat={{ cat|urlencode }}" style="padding:0.9rem 1.25rem; font-size:0.85rem; font-weight:600; border-bottom:2px solid {% if active_category == cat %}#22b9b0{% else %}transparent{% endif %}; color:{% if active_category == cat %}#22b9b0{% else %}rgba(255,255,255,0.5){% endif %}; transition:color 0.2s;">
+      {{ cat }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ===== POSTS ===== -->
+<div style="max-width:1100px; margin:0 auto; padding:2rem 2rem 4rem;">
+
+  {% if posts %}
+  <div style="display:flex; flex-direction:column; gap:0.75rem;">
+    {% for post in posts %}
+    <a href="/forum/{{ post.id }}" style="display:block; background:#1a1a1a; border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:1.25rem 1.5rem; transition:border-color 0.2s, background 0.2s;"
+       onmouseover="this.style.borderColor='rgba(34,185,176,0.3)'; this.style.background='#1e1e1e';"
+       onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'; this.style.background='#1a1a1a';">
+      <div style="display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+        <!-- Avatar -->
+        <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#22b9b0,#2f8c78); display:flex; align-items:center; justify-content:center; font-size:0.9rem; font-weight:700; flex-shrink:0;">
+          {{ post.author_name[0]|upper if post.author_name else '?' }}
+        </div>
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.3rem;">
+            <span style="background:rgba(34,185,176,0.1); color:#22b9b0; border:1px solid rgba(34,185,176,0.2); font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; padding:2px 7px; border-radius:3px;">{{ post.category }}</span>
+          </div>
+          <div style="font-weight:700; font-size:1rem; color:#fff; margin-bottom:0.3rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ post.title }}</div>
+          <div style="font-size:0.82rem; color:rgba(255,255,255,0.4);">
+            {{ post.author_name }} &bull;
+            {{ post.created_at[:10] if post.created_at else '' }} &bull;
+            {{ post.replies|length }} repl{% if post.replies|length != 1 %}ies{% else %}y{% endif %}
+          </div>
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div style="text-align:center; padding:4rem 2rem;">
+    <div style="font-size:3rem; margin-bottom:1rem;">💬</div>
+    <h2 style="font-size:1.2rem; font-weight:700; margin-bottom:0.5rem;">No posts yet</h2>
+    <p style="color:rgba(255,255,255,0.45); margin-bottom:1.5rem;">Be the first to start a conversation!</p>
+    {% if session.get('logged_in') %}
+    <a href="/forum/new" class="btn-teal">Start a Discussion &rarr;</a>
+    {% else %}
+    <a href="/register" class="btn-teal">Join the Community &rarr;</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

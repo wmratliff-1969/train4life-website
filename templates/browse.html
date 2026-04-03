@@ -112,6 +112,9 @@
               <div class="play-btn"></div>
             </div>
             <div class="card-duration">{{ video.duration }}</div>
+            {% if video.is_member_only and not is_subscribed %}
+            <div class="card-lock">🔒 Member</div>
+            {% endif %}
           </div>
           <div class="card-info">
             <div class="card-series">{{ video.series }}</div>

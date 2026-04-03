@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}New Post — TRAIN4LIFE Forum{% endblock %}
+
+{% block content %}
+
+<div style="max-width:700px; margin:3rem auto; padding:0 2rem;">
+  <div style="margin-bottom:1.5rem;">
+    <a href="/forum" style="font-size:0.85rem; color:rgba(255,255,255,0.4); transition:color 0.2s;"
+       onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+      &larr; Back to Forum
+    </a>
+  </div>
+
+  <h1 style="font-size:1.6rem; font-weight:700; margin-bottom:1.75rem;">Start a Discussion</h1>
+
+  {% if error %}
+  <div style="background:rgba(220,50,50,0.15); border:1px solid rgba(220,50,50,0.3); border-radius:6px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.88rem; color:#ff7b7b;">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/forum/new">
+    <div class="form-group">
+      <label for="category">Category</label>
+      <select id="category" name="category"
+              style="width:100%; background:#141414; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.7rem 1rem; color:#fff; font-family:'Cabin',sans-serif; font-size:0.95rem; outline:none;">
+        {% for cat in categories %}
+        <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="title">Title</label>
+      <input
+        type="text"
+        id="title"
+        name="title"
+        placeholder="What's on your mind?"
+        required
+        maxlength="200"
+      >
+    </div>
+
+    <div class="form-group">
+      <label for="body">Message</label>
+      <textarea
+        id="body"
+        name="body"
+        rows="8"
+        placeholder="Share your thoughts, questions, or encouragement..."
+        required
+        style="width:100%; background:#141414; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.7rem 1rem; color:#fff; font-family:'Cabin',sans-serif; font-size:0.95rem; outline:none; resize:vertical; transition:border-color 0.2s;"
+        onfocus="this.style.borderColor='#22b9b0'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'"
+      ></textarea>
+    </div>
+
+    <button type="submit" class="btn-teal btn-full">Post Discussion</button>
+  </form>
+</div>
+
+{% endblock %}
