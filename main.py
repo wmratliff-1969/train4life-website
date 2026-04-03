@@ -1,10 +1,19 @@
 from flask import Flask, render_template, redirect, url_for, session, request, jsonify
-import os
+import os, json
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# --- Video Data ---
+# --- Load content from data/content.json ---
+_content_path = os.path.join(os.path.dirname(__file__), 'data', 'content.json')
+with open(_content_path) as _f:
+    _content = json.load(_f)
+
+ALL_VHX_VIDEOS = _content['videos']       # 415 videos from VHX API
+COLLECTIONS = _content['collections']     # 84 collections
+PRODUCTS = _content['products']           # 30 products
+
+# Keep YouTube-based Express and Revelation videos for the streaming section
 EXPRESS_VIDEOS = [
     {"id":"express-1","title":"EXPRESS 1","youtube_id":"OzXRBaFP3C8","series":"EXPRESS 2026","duration":"10 min"},
     {"id":"express-2","title":"EXPRESS 2","youtube_id":"AfDG2NfXpuY","series":"EXPRESS 2026","duration":"10 min"},
@@ -48,79 +57,88 @@ REVELATION_VIDEOS = [
     {"id":"rev-11","title":"EP11 THE CHURCH THAT WOULDN'T BREAK","youtube_id":"evVWecl3e3k","series":"REVELATION","duration":"10 min"},
 ]
 
-PROGRAMS = [
-    {"id":"foundation-to-fire","title":"Foundation To Fire","count":6},
-    {"id":"post-super-bowl-shred-26","title":"Post-Super Bowl Shred 26","count":8},
-    {"id":"tighter-tummy","title":"Tighter Tummy In 10 Days","count":8},
-    {"id":"jingle-bell","title":"The Jingle Bell Challenge","count":29},
-    {"id":"x1-bodyweight","title":"X1 Bodyweight","count":1},
-    {"id":"core-cardio","title":"The Ultimate Core & Cardio Trainer","count":10},
-    {"id":"pre-holiday-sizzle","title":"28-Day Pre-Holiday Sizzle","count":6},
-    {"id":"strength-oct-2024","title":"Strength Academy 2024 October","count":9},
-    {"id":"back-to-school","title":"28-Day Back-To-School Challenge","count":6},
-    {"id":"strength-28","title":"28-Day Strength Academy","count":9},
-    {"id":"strength-q3-2024","title":"Strength Academy 2024 Q3","count":9},
-    {"id":"strength-q2-2024","title":"Strength Academy 2024 Q2","count":11},
-    {"id":"gluten-dairy","title":"28 Day Gluten & Dairy Challenge","count":1},
-    {"id":"post-super-bowl-diet","title":"28-Day Post-Super Bowl Shred Diet Only","count":1},
-    {"id":"sizzle-chisel","title":"28-Day Sizzle & Chisel Challenge","count":6},
-    {"id":"strength-q1-2024","title":"Strength Academy 2024 Q1","count":23},
-    {"id":"anti-inflammatory","title":"Anti-Inflammatory Meal Plan","count":1},
-    {"id":"strength-ladies","title":"Strength Academy For Ladies","count":9},
-    {"id":"kettlebell-club","title":"Q4 Kettlebell Club","count":5},
-    {"id":"fit-4-life","title":"Fit 4 Life Challenge","count":6},
-    {"id":"body-by-bells","title":"Body By Bells","count":5},
-    {"id":"memorial-day","title":"Memorial Day Meltdown","count":5},
-    {"id":"drop-a-dress","title":"Drop-A-Dress Size In 21 Days","count":8},
-    {"id":"trim-ratio","title":"Trim The Ratio Challenge","count":10},
-]
+STREAMABLE_VIDEOS = EXPRESS_VIDEOS + REVELATION_VIDEOS
 
-ALL_VIDEOS = EXPRESS_VIDEOS + REVELATION_VIDEOS
 
 def get_video_by_id(video_id):
-    for v in ALL_VIDEOS:
+    for v in STREAMABLE_VIDEOS:
         if v['id'] == video_id:
             return v
     return None
+
+def get_product_by_id(product_id):
+    for p in PRODUCTS:
+        if p['id'] == product_id:
+            return p
+    return None
+
+def get_product_videos(product_id):
+    product = get_product_by_id(product_id)
+    if not product:
+        return []
+    vhx_id = product.get('vhx_id', '')
+    # Match by product_ids list in each video
+    return [v for v in ALL_VHX_VIDEOS if vhx_id and int(vhx_id) in (v.get('product_ids') or [])]
+
 
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"})
 
+
 @app.route('/')
 def index():
     sample_videos = EXPRESS_VIDEOS[:8] + REVELATION_VIDEOS[:4]
-    top_programs = PROGRAMS[:4]
+    # Exclude system/subscription products (0 videos or no price)
+    purchasable = [p for p in PRODUCTS if p.get('video_count', 0) > 0 and p.get('price')]
+    top_programs = purchasable[:8]
     return render_template('index.html', sample_videos=sample_videos, programs=top_programs)
+
 
 @app.route('/browse')
 def browse():
     query = request.args.get('q', '').lower()
     if query:
-        results = [v for v in ALL_VIDEOS if query in v['title'].lower() or query in v['series'].lower()]
+        results = [v for v in STREAMABLE_VIDEOS
+                   if query in v['title'].lower() or query in v.get('series', '').lower()]
         return render_template('browse.html',
             express_videos=[], revelation_videos=[], results=results, query=query)
     return render_template('browse.html',
-        express_videos=EXPRESS_VIDEOS, revelation_videos=REVELATION_VIDEOS, results=None, query='')
+        express_videos=EXPRESS_VIDEOS, revelation_videos=REVELATION_VIDEOS,
+        results=None, query='')
+
 
 @app.route('/watch/<video_id>')
 def watch(video_id):
     video = get_video_by_id(video_id)
     if not video:
         return redirect(url_for('browse'))
-    if video['series'] == 'EXPRESS 2026':
+    if video.get('series') == 'EXPRESS 2026':
         related = [v for v in EXPRESS_VIDEOS if v['id'] != video_id][:6]
     else:
         related = [v for v in REVELATION_VIDEOS if v['id'] != video_id][:6]
     return render_template('watch.html', video=video, related=related)
 
+
 @app.route('/programs')
 def programs():
-    return render_template('programs.html', programs=PROGRAMS)
+    purchasable = [p for p in PRODUCTS if p.get('video_count', 0) > 0 and p.get('price')]
+    return render_template('programs.html', programs=purchasable)
+
+
+@app.route('/programs/<product_id>')
+def program_detail(product_id):
+    product = get_product_by_id(product_id)
+    if not product:
+        return redirect(url_for('programs'))
+    videos = get_product_videos(product_id)
+    return render_template('program_detail.html', program=product, videos=videos)
+
 
 @app.route('/subscribe')
 def subscribe():
     return render_template('subscribe.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -130,16 +148,31 @@ def login():
         return redirect(url_for('index'))
     return render_template('login.html')
 
+
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
 
 @app.route('/account')
 def account():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     return render_template('account.html')
+
+
+@app.route('/api/content')
+def api_content():
+    """JSON endpoint exposing all scraped VHX content."""
+    return jsonify({
+        'video_count': len(ALL_VHX_VIDEOS),
+        'product_count': len(PRODUCTS),
+        'collection_count': len(COLLECTIONS),
+        'videos': ALL_VHX_VIDEOS,
+        'products': PRODUCTS
+    })
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ program.title }} — TRAIN4LIFE{% endblock %}
+
+{% block content %}
+<div style="max-width:1100px; margin:0 auto; padding:2.5rem 2rem;">
+
+  <!-- Header -->
+  <div style="display:flex; gap:2rem; align-items:flex-start; margin-bottom:2.5rem; flex-wrap:wrap;">
+    {% if program.thumbnail %}
+    <img src="{{ program.thumbnail }}" alt="{{ program.title }}"
+         style="width:280px; height:158px; object-fit:cover; border-radius:10px; flex-shrink:0;">
+    {% endif %}
+    <div style="flex:1; min-width:200px;">
+      <div style="font-size:0.75rem; color:#22b9b0; font-weight:700; text-transform:uppercase; letter-spacing:2px; margin-bottom:0.5rem;">Program</div>
+      <h1 style="font-size:clamp(1.4rem,3vw,2.2rem); font-weight:700; margin-bottom:0.75rem;">{{ program.title }}</h1>
+      {% if program.description %}
+      <p style="color:rgba(255,255,255,0.65); line-height:1.6; margin-bottom:1rem; font-size:0.9rem;">{{ program.description }}</p>
+      {% endif %}
+      <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+        {% if program.price %}
+        <span style="font-size:1.3rem; font-weight:700; color:#22b9b0;">{{ program.price }}</span>
+        {% endif %}
+        <span style="color:rgba(255,255,255,0.45); font-size:0.85rem;">{{ program.video_count }} video{% if program.video_count != 1 %}s{% endif %}</span>
+        <a href="https://train4life.vhx.tv/products/{{ program.id }}" target="_blank"
+           class="btn-teal" style="font-size:0.85rem; padding:0.45rem 1.2rem;">Get on VHX &rarr;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video list -->
+  <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:1.5rem;">
+    <h2 style="font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:rgba(255,255,255,0.5); margin-bottom:1.2rem;">
+      {{ videos|length }} Videos
+    </h2>
+    {% for video in videos %}
+    <div style="display:flex; gap:1rem; align-items:center; padding:0.75rem 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div style="width:28px; text-align:center; color:rgba(255,255,255,0.3); font-size:0.8rem; flex-shrink:0;">{{ loop.index }}</div>
+      {% if video.thumbnail %}
+      <img src="{{ video.thumbnail }}" alt="{{ video.title }}"
+           style="width:90px; height:51px; object-fit:cover; border-radius:5px; flex-shrink:0;">
+      {% else %}
+      <div style="width:90px; height:51px; background:#222; border-radius:5px; flex-shrink:0;"></div>
+      {% endif %}
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ video.title }}</div>
+        {% if video.description %}
+        <div style="color:rgba(255,255,255,0.4); font-size:0.78rem; margin-top:0.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ video.description[:100] }}</div>
+        {% endif %}
+      </div>
+      {% if video.duration %}
+      <div style="color:rgba(255,255,255,0.35); font-size:0.8rem; flex-shrink:0;">{{ video.duration }}</div>
+      {% endif %}
+      <a href="https://train4life.vhx.tv{{ video.vhx_path }}" target="_blank"
+         style="font-size:0.78rem; color:#22b9b0; white-space:nowrap; flex-shrink:0;">Watch &rarr;</a>
+    </div>
+    {% else %}
+    <p style="color:rgba(255,255,255,0.4);">No videos found for this program.</p>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

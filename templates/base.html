@@ -318,28 +318,55 @@
 
     /* ===== HERO ===== */
     .hero {
-      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #141414 100%);
-      padding: 5rem 2rem 4rem;
-      text-align: center;
       position: relative;
+      min-height: 520px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       overflow: hidden;
+      text-align: center;
     }
 
-    .hero::before {
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background-image: url('/static/images/hero-bg.jpg');
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      z-index: 0;
+    }
+
+    .hero-bg::after {
       content: '';
       position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(ellipse at center, rgba(34,185,176,0.07) 0%, transparent 60%);
-      pointer-events: none;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.82) 100%);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      padding: 5rem 2rem 4rem;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .hero-tagline {
+      font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+      font-weight: 700;
+      font-style: italic;
+      color: #f0c040;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 1rem;
     }
 
     .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 5rem);
+      font-size: clamp(3rem, 8vw, 6rem);
       font-weight: 700;
-      letter-spacing: 4px;
+      letter-spacing: 6px;
       margin-bottom: 1rem;
       position: relative;
     }
@@ -1070,9 +1097,8 @@
 
       <ul class="nav-links" id="navLinks">
         <li><a href="/browse">Browse</a></li>
-        <li><a href="/programs">Programs</a></li>
-        <li><a href="/browse?q=express">Express</a></li>
-        <li><a href="/subscribe">Subscribe</a></li>
+        <li><a href="/forum">Forums</a></li>
+        <li><a href="#" id="search-nav-toggle">Search</a></li>
       </ul>
 
       <div class="nav-right">
