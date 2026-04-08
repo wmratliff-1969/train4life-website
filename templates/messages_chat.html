@@ -397,5 +397,35 @@ if (inp) {
   });
   inp.focus();
 }
+
+{% if sio_enabled %}
+// ── SocketIO real-time delivery (supplements HTTP polling) ──
+(function(){
+  var sioScript = document.createElement('script');
+  sioScript.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+  sioScript.crossOrigin = 'anonymous';
+  sioScript.onload = function() {
+    var socket = io();
+    socket.on('connect', function(){
+      socket.emit('join_chat', { chat_id: chatId });
+    });
+    socket.on('new_message', function(msg) {
+      if (!msg || !msg.id) return;
+      if (seenIds.has(msg.id)) return;
+      seenIds.add(msg.id);
+      if (msg.created_at && (!lastSince || msg.created_at > lastSince)) {
+        lastSince = msg.created_at;
+      }
+      appendBubble(msg);
+      scrollBottom();
+      if (msg.sender_id !== myEmail) {
+        playDing();
+        showBrowserNotif(msg.content, msg.sender_name);
+      }
+    });
+  };
+  document.head.appendChild(sioScript);
+})();
+{% endif %}
 </script>
 {% endblock %}

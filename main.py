@@ -9,6 +9,14 @@ try:
 except ImportError:
     _HTTP_OK = False
 
+# Flask-SocketIO — optional, gracefully degrades to HTTP polling if missing
+try:
+    from flask_socketio import SocketIO as _SocketIO, emit as _sio_emit, \
+        join_room as _sio_join, leave_room as _sio_leave
+    _SIO_OK = True
+except ImportError:
+    _SIO_OK = False
+
 # Load stripe conditionally so app works without it
 try:
     import stripe
@@ -18,6 +26,17 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'train4life-secret-2026-change-in-prod')
+
+# ── SocketIO + WebRTC live state ───────────────────────────────────────────────
+if _SIO_OK:
+    socketio = _SocketIO(app, cors_allowed_origins='*', async_mode='eventlet',
+                         logger=False, engineio_logger=False)
+else:
+    socketio = None
+
+_sio_lock        = threading.Lock()
+_sio_broadcaster = None   # socket-id of Jeff's broadcasting session
+_sio_viewers     = {}     # sid -> {email, name}
 
 import markupsafe
 @app.template_filter('linkify')
@@ -578,6 +597,37 @@ def _post_message(chat_id, sender_id, sender_name, content, is_admin=False):
         _save_messages(data)
         return msg
 
+def _post_and_broadcast(chat_id, sender_id, sender_name, content, is_admin=False):
+    """Post a message and push to SocketIO room for real-time delivery."""
+    msg = _post_message(chat_id, sender_id, sender_name, content, is_admin)
+    if socketio:
+        try:
+            socketio.emit('new_message', msg, to=f'chat:{chat_id}')
+        except Exception:
+            pass
+    return msg
+
+def _member_dm_id(email1, email2):
+    """Consistent chat-id for a member↔member DM (order-independent)."""
+    return 'mdm:' + ':'.join(sorted([email1.lower(), email2.lower()]))
+
+def _get_member_conversations(email):
+    """Return all member-to-member DM threads involving this email."""
+    with _msg_lock:
+        data = _load_messages()
+    convos = []
+    for key, msgs in data.items():
+        if not key.startswith('mdm:'):
+            continue
+        parts = key[4:].split(':')
+        if email.lower() not in [p.lower() for p in parts]:
+            continue
+        other = next((p for p in parts if p.lower() != email.lower()), None)
+        last  = msgs[-1] if msgs else None
+        convos.append({'chat_id': key, 'other_email': other, 'last_message': last})
+    convos.sort(key=lambda c: c['last_message']['created_at'] if c['last_message'] else '', reverse=True)
+    return convos
+
 def _get_messages(chat_id, limit=50, since=None):
     with _msg_lock:
         data  = _load_messages()
@@ -614,6 +664,19 @@ def _get_unread_count(email):
                 continue
             if not last_read or m['created_at'] > last_read:
                 count += 1
+        # member-to-member DMs
+        for key, msgs in data.items():
+            if not key.startswith('mdm:'):
+                continue
+            parts = key[4:].split(':')
+            if email.lower() not in [p.lower() for p in parts]:
+                continue
+            last_read = user_reads.get(key, '')
+            for m in msgs:
+                if m['sender_id'] == email:
+                    continue
+                if not last_read or m['created_at'] > last_read:
+                    count += 1
         return count
 
 def _ios_auth(email, token):
@@ -693,8 +756,16 @@ def api_live_status():
 
 @app.route('/live')
 def live():
-    return render_template('live.html', is_live=IS_LIVE, live_status=LIVE_STATUS,
-                           live_countdown_to=LIVE_COUNTDOWN_TO)
+    status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    settings    = _load_live_settings()
+    stream_mode = settings.get('stream_mode', '')
+    return render_template('live.html',
+                           is_live=(status == 'live'),
+                           live_status=status,
+                           live_countdown_to=countdown_to,
+                           live_stream_url=stream_url,
+                           stream_mode=stream_mode,
+                           sio_enabled=_SIO_OK)
 
 
 @app.route('/')
@@ -1565,9 +1636,15 @@ def _msg_auth():
 @app.route('/messages')
 @login_required
 def messages_page():
-    email  = session.get('user_email', '')
-    unread = _get_unread_count(email) if email else 0
-    return render_template('messages_list.html', unread=unread)
+    email       = session.get('user_email', '')
+    unread      = _get_unread_count(email) if email else 0
+    member_convos = _get_member_conversations(email) if email else []
+    # Enrich with other user's display name
+    users = _load_users()
+    for c in member_convos:
+        other = users.get(c['other_email'], {})
+        c['other_name'] = other.get('name') or (c['other_email'].split('@')[0].capitalize())
+    return render_template('messages_list.html', unread=unread, member_convos=member_convos)
 
 
 @app.route('/messages/<chat_id>', methods=['GET', 'POST'])
@@ -1595,7 +1672,7 @@ def messages_chat(chat_id):
         elif is_readonly:
             error = 'Only Jeff can post to Announcements.'
         else:
-            _post_message(actual_id, email, name, content, False)
+            _post_and_broadcast(actual_id, email, name, content, False)
             return redirect(url_for('messages_chat', chat_id=chat_id))
 
     msgs = _get_messages(actual_id)
@@ -1613,7 +1690,85 @@ def messages_chat(chat_id):
         messages=msgs, is_readonly=is_readonly,
         my_email=email, error=error,
         is_dm=(chat_id == 'dm'),
+        sio_enabled=_SIO_OK,
     )
+
+
+@app.route('/messages/member/<path:target_email>', methods=['GET', 'POST'])
+@login_required
+def messages_member(target_email):
+    email = session.get('user_email', '')
+    users = _load_users()
+    user  = users.get(email, {})
+    name  = user.get('name') or email.split('@')[0].capitalize()
+
+    # Validate target exists
+    target_user = users.get(target_email)
+    if not target_user or target_email == email:
+        return redirect(url_for('messages_page'))
+
+    target_name = target_user.get('name') or target_email.split('@')[0].capitalize()
+    chat_id     = _member_dm_id(email, target_email)
+
+    error = None
+    if request.method == 'POST':
+        content = request.form.get('content', '').strip()
+        if not content:
+            error = 'Message cannot be empty.'
+        elif len(content) > 2000:
+            error = 'Message too long (max 2000 characters).'
+        else:
+            _post_and_broadcast(chat_id, email, name, content, False)
+            return redirect(url_for('messages_member', target_email=target_email))
+
+    msgs = _get_messages(chat_id)
+    _mark_read(email, chat_id)
+    return render_template('messages_chat.html',
+        chat_id=chat_id,
+        title=f'💬 {target_name}',
+        subtitle=f'Private conversation with {target_name}',
+        messages=msgs, is_readonly=False,
+        my_email=email, error=error,
+        is_dm=True,
+        sio_enabled=_SIO_OK,
+    )
+
+
+@app.route('/api/members')
+@login_required
+def api_members():
+    users = _load_users()
+    my_email = session.get('user_email', '')
+    members = []
+    for em, u in users.items():
+        if em == my_email:
+            continue
+        members.append({
+            'email': em,
+            'name': u.get('name') or em.split('@')[0].capitalize(),
+        })
+    members.sort(key=lambda m: m['name'].lower())
+    return jsonify({'members': members})
+
+
+@app.route('/api/live/save-replay', methods=['POST'])
+@_admin_required
+def api_live_save_replay():
+    f = request.files.get('replay')
+    if not f:
+        return jsonify({'error': 'no file'}), 400
+    replay_dir = os.path.join(_base, 'data', 'replays')
+    os.makedirs(replay_dir, exist_ok=True)
+    stamp = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    path  = os.path.join(replay_dir, f'replay_{stamp}.webm')
+    f.save(path)
+    # Log reference in live settings
+    settings = _load_live_settings()
+    replays  = settings.get('replays', [])
+    replays.insert(0, {'file': f'replay_{stamp}.webm', 'created_at': stamp})
+    settings['replays'] = replays[:20]
+    _save_live_settings(settings)
+    return jsonify({'ok': True, 'file': f'replay_{stamp}.webm'})
 
 
 @app.route('/api/messages')
@@ -1858,7 +2013,7 @@ def api_post_message():
     else:
         return jsonify({'error': 'invalid chat'}), 400
 
-    msg = _post_message(chat_id, email, sender_name, content, is_admin)
+    msg = _post_and_broadcast(chat_id, email, sender_name, content, is_admin)
 
     # Push notification — inline, no functions, fires when Jeff/admin sends
     print(f"=== API POST MESSAGE HIT === is_admin={is_admin} chat={chat_id}")
@@ -1947,7 +2102,7 @@ def admin_messages_dm(member_email):
         print(f"=== DM SEND ROUTE HIT === member={member_email}")
         content = request.form.get('content', '').strip()
         if content and len(content) <= 2000:
-            _post_message(dm_key, JEFF_EMAIL, 'Jeff', content, True)
+            _post_and_broadcast(dm_key, JEFF_EMAIL, 'Jeff', content, True)
             try:
                 import requests as _r
                 resp = _r.post(
@@ -1989,7 +2144,7 @@ def admin_messages_chat(chat_id):
         print(f"=== ADMIN CHAT SEND HIT === chat_id={chat_id}")
         content = request.form.get('content', '').strip()
         if content and len(content) <= 2000:
-            _post_message(chat_id, JEFF_EMAIL, 'Jeff', content, True)
+            _post_and_broadcast(chat_id, JEFF_EMAIL, 'Jeff', content, True)
             try:
                 import requests as _r
                 resp = _r.post(
@@ -2046,7 +2201,7 @@ def admin_api_send():
     else:
         return jsonify({'error': f'invalid chat: {chat!r}'}), 400
     jeff_email = session.get('user_email', JEFF_EMAIL)
-    msg = _post_message(chat_id, jeff_email, 'Jeff', content, True)
+    msg = _post_and_broadcast(chat_id, jeff_email, 'Jeff', content, True)
 
     # Push notification — inline, full response logged
     import requests
@@ -2604,6 +2759,153 @@ def admin_pdfs_delete():
     return redirect(url_for('admin_pdfs'))
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SOCKETIO EVENTS — WebRTC signaling + real-time messaging
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if _SIO_OK and socketio:
+
+    @socketio.on('connect')
+    def _sio_connect():
+        pass  # auth is checked per-event via session
+
+    @socketio.on('disconnect')
+    def _sio_disconnect():
+        global _sio_broadcaster, _sio_viewers
+        sid = request.sid
+        with _sio_lock:
+            is_broadcaster = (sid == _sio_broadcaster)
+            if is_broadcaster:
+                _sio_broadcaster = None
+            _sio_viewers.pop(sid, None)
+            count = len(_sio_viewers)
+        if is_broadcaster:
+            try:
+                settings = _load_live_settings()
+                if settings.get('stream_mode') == 'webrtc':
+                    settings['status']     = 'off'
+                    settings['stream_mode'] = ''
+                    _save_live_settings(settings)
+            except Exception:
+                pass
+            socketio.emit('stream_ended', {}, to='livestream')
+        socketio.emit('viewer_count', {'count': count}, to='livestream')
+
+    # ── WebRTC live streaming ────────────────────────────────────────────────
+
+    @socketio.on('broadcaster_ready')
+    def _sio_broadcaster_ready():
+        global _sio_broadcaster
+        if not session.get('is_admin'):
+            return
+        with _sio_lock:
+            _sio_broadcaster = request.sid
+        _sio_join('livestream')
+        settings = _load_live_settings()
+        settings['status']      = 'live'
+        settings['stream_mode'] = 'webrtc'
+        _save_live_settings(settings)
+        socketio.emit('stream_started', {}, to='livestream', include_self=False)
+        with _sio_lock:
+            count = len(_sio_viewers)
+        _sio_emit('viewer_count', {'count': count})
+
+    @socketio.on('stop_broadcast')
+    def _sio_stop_broadcast():
+        global _sio_broadcaster
+        if not session.get('is_admin'):
+            return
+        with _sio_lock:
+            _sio_broadcaster = None
+        settings = _load_live_settings()
+        settings['status']      = 'off'
+        settings['stream_mode'] = ''
+        _save_live_settings(settings)
+        socketio.emit('stream_ended', {}, to='livestream')
+
+    @socketio.on('join_live')
+    def _sio_join_live():
+        global _sio_viewers
+        sid   = request.sid
+        email = session.get('user_email', '')
+        name  = session.get('user_name', 'Member') or 'Member'
+        _sio_join('livestream')
+        with _sio_lock:
+            _sio_viewers[sid]  = {'email': email, 'name': name}
+            broadcaster        = _sio_broadcaster
+            count              = len(_sio_viewers)
+        socketio.emit('viewer_count', {'count': count}, to='livestream')
+        if broadcaster:
+            socketio.emit('new_viewer', {'sid': sid, 'name': name}, to=broadcaster)
+        _sio_emit('stream_state', {'is_live': broadcaster is not None})
+
+    @socketio.on('leave_live')
+    def _sio_leave_live():
+        global _sio_viewers
+        sid = request.sid
+        _sio_leave('livestream')
+        with _sio_lock:
+            _sio_viewers.pop(sid, None)
+            count = len(_sio_viewers)
+        socketio.emit('viewer_count', {'count': count}, to='livestream')
+
+    @socketio.on('webrtc_offer')
+    def _sio_webrtc_offer(data):
+        to = data.get('to')
+        if to:
+            socketio.emit('webrtc_offer',
+                          {'offer': data.get('offer'), 'from': request.sid}, to=to)
+
+    @socketio.on('webrtc_answer')
+    def _sio_webrtc_answer(data):
+        to = data.get('to')
+        if to:
+            socketio.emit('webrtc_answer',
+                          {'answer': data.get('answer'), 'from': request.sid}, to=to)
+
+    @socketio.on('webrtc_ice')
+    def _sio_webrtc_ice(data):
+        to = data.get('to')
+        if to:
+            socketio.emit('webrtc_ice',
+                          {'candidate': data.get('candidate'), 'from': request.sid}, to=to)
+
+    @socketio.on('live_chat')
+    def _sio_live_chat(data):
+        email = session.get('user_email', '')
+        if not email:
+            return
+        name     = session.get('user_name', 'Member') or 'Member'
+        content  = (data.get('content') or '').strip()[:500]
+        is_admin = bool(session.get('is_admin'))
+        if not content:
+            return
+        msg = {
+            'name':     name,
+            'content':  content,
+            'is_admin': is_admin,
+            'ts':       datetime.datetime.utcnow().strftime('%H:%M'),
+        }
+        socketio.emit('live_chat', msg, to='livestream')
+
+    # ── Real-time messaging ──────────────────────────────────────────────────
+
+    @socketio.on('join_chat')
+    def _sio_join_chat(data):
+        chat_id = (data.get('chat_id') or '').strip()
+        if chat_id:
+            _sio_join(f'chat:{chat_id}')
+
+    @socketio.on('leave_chat')
+    def _sio_leave_chat(data):
+        chat_id = (data.get('chat_id') or '').strip()
+        if chat_id:
+            _sio_leave(f'chat:{chat_id}')
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    if socketio:
+        socketio.run(app, host='0.0.0.0', port=port, debug=True)
+    else:
+        app.run(host='0.0.0.0', port=port, debug=True)

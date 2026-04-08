@@ -3,3 +3,5 @@ gunicorn
 python-dotenv
 stripe
 requests
+flask-socketio
+eventlet

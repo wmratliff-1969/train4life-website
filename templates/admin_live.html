@@ -2,6 +2,69 @@
 {% block title %}Live Controls — TRAIN4LIFE Admin{% endblock %}
 {% block nav_live %}active{% endblock %}
 
+{% block head_extra %}
+<style>
+  /* ── WebRTC Broadcast Card ── */
+  .webrtc-card {
+    background: #1a1a1a;
+    border: 2px solid rgba(229,62,62,0.35);
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .webrtc-card-head {
+    font-size: 0.78rem; font-weight: 800; letter-spacing: 2px;
+    text-transform: uppercase; color: #f87171; margin-bottom: 1.2rem;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .webrtc-preview {
+    width: 100%; aspect-ratio: 16/9; background: #000;
+    border-radius: 10px; overflow: hidden; margin-bottom: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.3); font-size: 0.88rem; position: relative;
+  }
+  .webrtc-preview video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .preview-placeholder { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; z-index: 1; }
+
+  .webrtc-controls { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+
+  .btn-go-live {
+    flex: 1; min-width: 140px;
+    background: #e53e3e; color: #fff; border: none;
+    padding: 1rem 1.5rem; border-radius: 10px;
+    font-size: 1.1rem; font-weight: 900; letter-spacing: 1px;
+    cursor: pointer; transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 0 24px rgba(229,62,62,0.5);
+  }
+  .btn-go-live:hover { background: #c53030; box-shadow: 0 0 36px rgba(229,62,62,0.7); }
+  .btn-go-live:disabled { background: #555; box-shadow: none; cursor: not-allowed; }
+
+  .btn-stop-live {
+    flex: 1; min-width: 140px;
+    background: #1a1a1a; color: #f87171;
+    border: 2px solid rgba(229,62,62,0.5);
+    padding: 1rem 1.5rem; border-radius: 10px;
+    font-size: 1rem; font-weight: 800; letter-spacing: 1px;
+    cursor: pointer; transition: background 0.2s; display: none;
+  }
+  .btn-stop-live:hover { background: rgba(229,62,62,0.1); }
+
+  .viewer-badge {
+    font-size: 0.82rem; color: rgba(255,255,255,0.45);
+    padding: 0.5rem 0.8rem; background: rgba(255,255,255,0.05);
+    border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+    display: none; white-space: nowrap;
+  }
+  .viewer-badge strong { color: #f87171; }
+
+  .webrtc-status {
+    margin-top: 0.75rem; font-size: 0.83rem;
+    color: rgba(255,255,255,0.4); min-height: 1.2em;
+  }
+  .webrtc-status.live { color: #f87171; font-weight: 700; }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="a-page" style="max-width:660px;">
 
@@ -10,6 +73,27 @@
     <h1>Live Controls</h1>
     <p>Changes take effect immediately — no deploy needed.</p>
   </div>
+
+  <!-- ══ WebRTC Direct Broadcast ══════════════════════════════════════════ -->
+  <div class="webrtc-card">
+    <div class="webrtc-card-head">🔴 Broadcast Directly From This Device</div>
+
+    <div class="webrtc-preview" id="preview-box">
+      <div class="preview-placeholder" id="preview-placeholder">
+        <span style="font-size:2rem;opacity:0.25;">📹</span>
+        <span>Camera preview appears here</span>
+      </div>
+      <video id="preview-video" autoplay muted playsinline style="display:none;"></video>
+    </div>
+
+    <div class="webrtc-controls">
+      <button class="btn-go-live" id="go-live-btn">🔴 GO LIVE</button>
+      <button class="btn-stop-live" id="stop-btn">⏹ STOP STREAM</button>
+      <div class="viewer-badge" id="viewer-badge">👁 <strong id="viewer-count">0</strong> watching</div>
+    </div>
+    <div class="webrtc-status" id="webrtc-status">Ready — click GO LIVE to start broadcasting to members.</div>
+  </div>
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
 
   {% if saved %}
   <div class="a-alert a-alert-success">✅ Saved! Changes are live now.</div>
@@ -131,12 +215,129 @@
   <div class="a-card" style="margin-top:28px; background:#fafafa;">
     <div class="a-card-head">Workflow</div>
     <ol style="font-size:0.83rem; color:#71717a; line-height:2.2; padding-left:1.3rem;">
-      <li>Set showtime → select <strong style="color:#111;">Countdown</strong> → Save</li>
-      <li>When show starts → select <strong style="color:#111;">Live Now</strong> → Save</li>
-      <li>After show → select <strong style="color:#111;">Off Air</strong> → clear showtime → Save</li>
+      <li><strong style="color:#111;">Direct broadcast:</strong> Click 🔴 GO LIVE above — camera streams instantly to all members on /live</li>
+      <li><strong style="color:#111;">YouTube/Zoom:</strong> Paste URL below → set status to Live Now → Save</li>
+      <li>After show → click STOP (or select Off Air below) → replay is saved automatically</li>
     </ol>
   </div>
 
 </div>
+
+<script>
+(function(){
+  var s=document.createElement('script');
+  s.src='https://cdn.socket.io/4.7.5/socket.io.min.js';
+  s.crossOrigin='anonymous';
+  s.onload=initBroadcaster;
+  document.head.appendChild(s);
+
+  function initBroadcaster(){
+    var socket=io();
+    var localStream=null, mediaRecorder=null, recordedChunks=[];
+    var peerConns={};  // sid -> RTCPeerConnection
+    var isLive=false;
+
+    var goBtn=document.getElementById('go-live-btn');
+    var stopBtn=document.getElementById('stop-btn');
+    var statusEl=document.getElementById('webrtc-status');
+    var viewerEl=document.getElementById('viewer-count');
+    var viewerBadge=document.getElementById('viewer-badge');
+    var previewVideo=document.getElementById('preview-video');
+    var previewPlaceholder=document.getElementById('preview-placeholder');
+
+    // ── Viewer count ──
+    socket.on('viewer_count',function(d){
+      if(viewerEl)viewerEl.textContent=d.count;
+    });
+
+    // ── New viewer joined — create WebRTC offer ──
+    socket.on('new_viewer',async function(d){
+      var sid=d.sid;
+      var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+      peerConns[sid]=pc;
+      if(localStream)localStream.getTracks().forEach(function(t){pc.addTrack(t,localStream);});
+      pc.onicecandidate=function(e){if(e.candidate)socket.emit('webrtc_ice',{to:sid,candidate:e.candidate});};
+      var offer=await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('webrtc_offer',{to:sid,offer:offer});
+    });
+
+    // ── Viewer answered ──
+    socket.on('webrtc_answer',async function(d){
+      var pc=peerConns[d.from];
+      if(pc)await pc.setRemoteDescription(new RTCSessionDescription(d.answer));
+    });
+
+    // ── ICE candidate ──
+    socket.on('webrtc_ice',async function(d){
+      var pc=peerConns[d.from];
+      if(pc&&d.candidate)await pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch(function(){});
+    });
+
+    // ── GO LIVE ──
+    if(goBtn) goBtn.addEventListener('click',async function(){
+      try{
+        setStatus('Requesting camera…');
+        localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+        if(previewVideo){previewVideo.srcObject=localStream;previewVideo.style.display='block';}
+        if(previewPlaceholder)previewPlaceholder.style.display='none';
+
+        // MediaRecorder for replay
+        try{
+          mediaRecorder=new MediaRecorder(localStream,{mimeType:'video/webm;codecs=vp8,opus'});
+        }catch(e){
+          mediaRecorder=new MediaRecorder(localStream);
+        }
+        mediaRecorder.ondataavailable=function(e){if(e.data&&e.data.size>0)recordedChunks.push(e.data);};
+        mediaRecorder.start(1000);
+
+        socket.emit('broadcaster_ready');
+        isLive=true;
+        goBtn.disabled=true; goBtn.style.display='none';
+        stopBtn.style.display='block';
+        if(viewerBadge)viewerBadge.style.display='block';
+        setStatus('🔴 LIVE — members can see your stream',true);
+      }catch(err){
+        setStatus('Camera error: '+err.message);
+      }
+    });
+
+    // ── STOP ──
+    if(stopBtn) stopBtn.addEventListener('click',function(){
+      if(mediaRecorder&&mediaRecorder.state!=='inactive'){
+        mediaRecorder.onstop=saveReplay;
+        mediaRecorder.stop();
+      }else{
+        saveReplay();
+      }
+      if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
+      Object.keys(peerConns).forEach(function(sid){peerConns[sid].close();});
+      peerConns={};
+      if(previewVideo){previewVideo.srcObject=null;previewVideo.style.display='none';}
+      if(previewPlaceholder)previewPlaceholder.style.display='flex';
+      socket.emit('stop_broadcast');
+      isLive=false;
+      goBtn.disabled=false; goBtn.style.display='block';
+      stopBtn.style.display='none';
+      if(viewerBadge)viewerBadge.style.display='none';
+      setStatus('Stream stopped. Replay is being saved…');
+    });
+
+    function saveReplay(){
+      if(!recordedChunks.length)return;
+      var blob=new Blob(recordedChunks,{type:'video/webm'});
+      var fd=new FormData(); fd.append('replay',blob,'replay.webm');
+      fetch('/api/live/save-replay',{method:'POST',body:fd})
+        .then(function(){setStatus('Stream stopped. Replay saved ✅');})
+        .catch(function(){setStatus('Stream stopped (replay save failed)');});
+      recordedChunks=[];
+    }
+
+    function setStatus(msg,live){
+      if(statusEl){statusEl.textContent=msg;statusEl.className='webrtc-status'+(live?' live':'');}
+    }
+  }
+})();
+</script>
 
 {% endblock %}
