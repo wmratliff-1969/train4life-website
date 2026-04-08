@@ -604,5 +604,50 @@ function handleNotify(e){e.preventDefault();document.getElementById('notifyForm'
   }
 })();
 {% endif %}
+
+// ── Landscape mobile: JS-driven layout (works inside WKWebView) ──
+(function() {
+  function handleOrientation() {
+    var isLandscape = window.innerWidth > window.innerHeight;
+    var isMobile    = window.innerWidth <= 926; // iPhone max landscape width
+
+    if (isLandscape && isMobile) {
+      // Force video player to fill the entire screen
+      var player = document.getElementById('live-player-wrap') ||
+                   document.querySelector('.live-player-wrap');
+      if (player) {
+        player.style.cssText = 'position:fixed!important;top:0!important;left:0!important;' +
+                               'width:100vw!important;height:100vh!important;' +
+                               'z-index:99999!important;margin:0!important;padding:0!important;';
+      }
+      var video = document.querySelector('video');
+      if (video) {
+        video.style.cssText = 'width:100%!important;height:100%!important;object-fit:cover!important;';
+      }
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      // Hide navigation bar
+      var nav = document.querySelector('nav') || document.querySelector('.navbar');
+      if (nav) nav.style.display = 'none';
+    } else {
+      // Restore all overrides when returning to portrait
+      var player = document.getElementById('live-player-wrap') ||
+                   document.querySelector('.live-player-wrap');
+      if (player) player.style.cssText = '';
+      var video = document.querySelector('video');
+      if (video) video.style.cssText = '';
+      document.body.style.overflow  = '';
+      document.body.style.position  = '';
+      var nav = document.querySelector('nav') || document.querySelector('.navbar');
+      if (nav) nav.style.display = '';
+    }
+  }
+
+  window.addEventListener('resize', handleOrientation);
+  window.addEventListener('orientationchange', function() {
+    setTimeout(handleOrientation, 200); // short delay for browser to settle
+  });
+  handleOrientation(); // run immediately on page load
+})();
 </script>
 {% endblock %}
