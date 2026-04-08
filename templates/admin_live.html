@@ -289,6 +289,7 @@
 
   function initBroadcaster(){
     var socket=io({transports:['websocket'],upgrade:false});
+    var BCAST_TOKEN='{{ broadcast_token }}';  // server-issued, validated on broadcaster_ready
     var localStream=null, mediaRecorder=null, recordedChunks=[];
     var peerConns={};  // sid -> RTCPeerConnection
     var isLive=false;
@@ -370,7 +371,7 @@
         mediaRecorder.ondataavailable=function(e){if(e.data&&e.data.size>0)recordedChunks.push(e.data);};
         mediaRecorder.start(1000);
 
-        socket.emit('broadcaster_ready');
+        socket.emit('broadcaster_ready', {token: BCAST_TOKEN});
         isLive=true;
         goBtn.disabled=true; goBtn.style.display='none';
         stopBtn.style.display='block';
@@ -395,7 +396,7 @@
       if(previewVideo){previewVideo.pause();previewVideo.srcObject=null;previewVideo.style.display='none';}
       if(previewPlaceholder)previewPlaceholder.style.display='flex';
       if(previewBox)previewBox.classList.remove('streaming');
-      socket.emit('stop_broadcast');
+      socket.emit('stop_broadcast', {token: BCAST_TOKEN});
       isLive=false;
       goBtn.disabled=false; goBtn.style.display='block';
       stopBtn.style.display='none';

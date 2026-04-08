@@ -1,6 +1,6 @@
 from flask import (Flask, render_template, redirect, url_for, session,
                    request, jsonify, flash, Response)
-import os, json, hashlib, datetime, re, base64, uuid, threading, time
+import os, json, hashlib, datetime, re, base64, uuid, threading, time, secrets
 from collections import defaultdict
 from functools import wraps
 try:
@@ -34,9 +34,10 @@ if _SIO_OK:
 else:
     socketio = None
 
-_sio_lock        = threading.Lock()
-_sio_broadcaster = None   # socket-id of Jeff's broadcasting session
-_sio_viewers     = {}     # sid -> {email, name}
+_sio_lock             = threading.Lock()
+_sio_broadcaster      = None   # socket-id of Jeff's broadcasting session
+_sio_viewers          = {}     # sid -> {email, name}
+_sio_broadcast_token  = None   # short-lived token issued at /admin/live page load
 
 import markupsafe
 @app.template_filter('linkify')
@@ -2287,6 +2288,11 @@ def admin_dashboard():
 @app.route('/admin/live', methods=['GET', 'POST'])
 @_admin_required
 def admin_live():
+    global _sio_broadcast_token
+    # Rotate token on every page load; the JS embeds it and sends it back
+    # with broadcaster_ready so the SocketIO handler can auth without
+    # relying on session cookies (which don't reliably travel over WS).
+    _sio_broadcast_token = secrets.token_hex(24)
     status, countdown_to, message, timer_for, stream_url = _get_live_vars()
     saved = False
     if request.method == 'POST':
@@ -2315,7 +2321,8 @@ def admin_live():
                            live_message=message,
                            live_timer_for=timer_for,
                            live_stream_url=stream_url,
-                           saved=saved)
+                           saved=saved,
+                           broadcast_token=_sio_broadcast_token)
 
 
 @app.route('/api/admin/set-live', methods=['POST'])
@@ -2803,9 +2810,19 @@ if _SIO_OK and socketio:
     # ── WebRTC live streaming ────────────────────────────────────────────────
 
     @socketio.on('broadcaster_ready')
-    def _sio_broadcaster_ready():
+    def _sio_broadcaster_ready(data=None):
         global _sio_broadcaster
-        if not session.get('is_admin'):
+        # Prefer token-based auth (session cookies are unreliable over
+        # WebSocket-only transport on some hosts).  Fall back to session
+        # flag so older clients still work.
+        data = data or {}
+        token_ok = (
+            _sio_broadcast_token is not None
+            and data.get('token') == _sio_broadcast_token
+        )
+        if not token_ok and not session.get('is_admin'):
+            print(f"[broadcaster_ready] BLOCKED — token_ok={token_ok} "
+                  f"is_admin={session.get('is_admin')} sid={request.sid}")
             return
         with _sio_lock:
             _sio_broadcaster = request.sid
@@ -2820,9 +2837,14 @@ if _SIO_OK and socketio:
         _sio_emit('viewer_count', {'count': count})
 
     @socketio.on('stop_broadcast')
-    def _sio_stop_broadcast():
+    def _sio_stop_broadcast(data=None):
         global _sio_broadcaster
-        if not session.get('is_admin'):
+        data = data or {}
+        token_ok = (
+            _sio_broadcast_token is not None
+            and data.get('token') == _sio_broadcast_token
+        )
+        if not token_ok and not session.get('is_admin'):
             return
         with _sio_lock:
             _sio_broadcaster = None
