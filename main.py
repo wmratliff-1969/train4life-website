@@ -485,6 +485,28 @@ def _current_user():
     users = _load_users()
     return users.get(session.get('user_email'))
 
+def _viewer_section(user=None):
+    """Return the current viewer's program section: 'express', 'bible', or 'both'.
+
+    Priority:
+      1. Explicit ``section`` field on the user record (admin-settable)
+      2. ``plan`` field — 'express' maps to express section
+      3. Default 'both' — all other subscribers see every live stream
+    """
+    if user is None:
+        user = _current_user()
+    if not user:
+        return 'both'
+    sec = user.get('section', '').strip().lower()
+    if sec in ('express', 'bible'):
+        return sec
+    plan = (user.get('plan') or '').strip().lower()
+    if plan == 'express':
+        return 'express'
+    if plan in ('bible', 'bible_bootcamp'):
+        return 'bible'
+    return 'both'
+
 def _is_subscribed(user=None):
     """Return True if user has an active subscription."""
     if user is None:
@@ -733,6 +755,7 @@ def inject_globals():
         live_countdown_to=countdown_to,
         live_timer_for=timer_for,
         live_stream_url=stream_url,
+        viewer_section=_viewer_section(),
     )
 
 
@@ -771,8 +794,10 @@ def live():
                            is_live=(status == 'live'),
                            live_status=status,
                            live_countdown_to=countdown_to,
+                           live_timer_for=timer_for,
                            live_stream_url=stream_url,
                            stream_mode=stream_mode,
+                           viewer_section=_viewer_section(),
                            sio_enabled=_SIO_OK)
 
 

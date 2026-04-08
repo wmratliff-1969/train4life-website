@@ -1366,7 +1366,9 @@
     }
   </style>
 </head>
-<body class="bar-{{ live_status }}">
+{# viewer_sees_live: True when this viewer's section matches the broadcast target #}
+{% set viewer_sees_live = live_timer_for == 'both' or viewer_section == 'both' or live_timer_for == viewer_section %}
+<body class="bar-{{ live_status if viewer_sees_live else 'off' }}">
   <nav>
     <div class="nav-inner">
       <a href="/" class="logo">TRAIN<span>4</span>LIFE</a>
@@ -1383,14 +1385,14 @@
         {% endif %}
         <li><a href="/resources" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Resources</a></li>
         <li>
-          {% if live_status == 'live' %}
+          {% if viewer_sees_live and live_status == 'live' %}
             <a href="{{ live_stream_url if live_stream_url else '/live' }}"
                {% if live_stream_url %}target="_blank" rel="noopener noreferrer"{% endif %}
                class="nav-live state-live"
                style="display:inline-flex;align-items:center;gap:8px;background:#CC0000;border:3px solid #FF0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 25px rgba(255,0,0,0.7);">
               🔴 LIVE NOW
             </a>
-          {% elif live_status == 'countdown' %}
+          {% elif viewer_sees_live and live_status == 'countdown' %}
             <a href="/live" class="nav-live state-countdown"
                style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:3px solid #CC0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 20px rgba(204,0,0,0.5);">
               🔴 LIVE SOON
@@ -1433,8 +1435,8 @@
     </div>
   </nav>
 
-  <!-- ===== LIVE STATUS BAR (hidden when off, and on /live itself) ===== -->
-  {% if live_status != 'off' and request.endpoint != 'live' %}
+  <!-- ===== LIVE STATUS BAR (hidden when off, on /live, or viewer not targeted) ===== -->
+  {% if live_status != 'off' and viewer_sees_live and request.endpoint != 'live' %}
   <a href="{{ live_stream_url if live_stream_url and live_status == 'live' else '/live' }}"
      {% if live_stream_url and live_status == 'live' %}target="_blank" rel="noopener noreferrer"{% endif %}
      id="live-status-bar" class="bar-{{ live_status }}">
@@ -1458,7 +1460,7 @@
   </a>
   {% endif %}
 
-  {% if live_status == 'countdown' and live_countdown_to %}
+  {% if live_status == 'countdown' and viewer_sees_live and live_countdown_to %}
   <script>
     (function() {
       var goLiveAt  = new Date("{{ live_countdown_to }}");

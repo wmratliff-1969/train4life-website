@@ -2,6 +2,12 @@
 {% block title %}LIVE — TRAIN4LIFE{% endblock %}
 
 {% block content %}
+{# viewer_sees_live: True when this viewer's section is targeted by the current broadcast.
+   timer_for == 'both'          → everyone sees it
+   viewer_section == 'both'     → this viewer is in both sections (default for general members)
+   timer_for == viewer_section  → exact match (e.g. 'express' == 'express')
+#}
+{% set viewer_sees_live = live_timer_for == 'both' or viewer_section == 'both' or live_timer_for == viewer_section %}
 <style>
   .live-page {
     min-height: 100vh;
@@ -298,9 +304,9 @@
 
 <div class="live-page">
 
-  {% if live_status != 'live' %}
+  {% if live_status != 'live' or not viewer_sees_live %}
   <div class="live-header">
-    {% if live_status == 'countdown' %}
+    {% if live_status == 'countdown' and viewer_sees_live %}
       <h1 style="color:#FF8888;">🔴 GOING LIVE SOON</h1>
       <p>Countdown to the next TRAIN4LIFE live session</p>
     {% else %}
@@ -314,9 +320,9 @@
 
     <!-- ── Main column ── -->
     <div class="live-main">
-      <div class="live-card {% if live_status == 'live' %}is-live{% elif live_status == 'countdown' %}is-countdown{% endif %}">
+      <div class="live-card {% if viewer_sees_live and live_status == 'live' %}is-live{% elif viewer_sees_live and live_status == 'countdown' %}is-countdown{% endif %}">
 
-        {% if live_status == 'live' %}
+        {% if live_status == 'live' and viewer_sees_live %}
           <div id="live-player-wrap">
           {% if stream_mode == 'webrtc' %}
             <div class="live-player">
@@ -363,7 +369,7 @@
           </div>
           </div><!-- /#live-player-wrap -->
 
-        {% elif live_status == 'countdown' %}
+        {% elif live_status == 'countdown' and viewer_sees_live %}
           <div class="countdown-hero">
             <div class="countdown-hero-label">Going Live In</div>
             <div class="countdown-hero-clock" id="page-countdown">--:--:--</div>
@@ -379,7 +385,7 @@
 
         <div class="live-card-body">
 
-          {% if live_status == 'live' %}
+          {% if live_status == 'live' and viewer_sees_live %}
             <div class="live-badge on"><span class="live-badge-dot"></span> On Air</div>
             <h2>TRAIN4LIFE is Live!</h2>
             <p class="live-subtitle">Join the live session — workouts, Bible study, and community in real time.</p>
@@ -389,7 +395,7 @@
               <a href="{{ live_stream_url }}" target="_blank" rel="noopener" class="btn-join">🔴 TAP TO JOIN NOW</a>
             {% endif %}
 
-          {% elif live_status == 'countdown' %}
+          {% elif live_status == 'countdown' and viewer_sees_live %}
             <div class="live-badge soon"><span class="live-badge-dot"></span> Going Live Soon</div>
             <h2>Show Starts Soon!</h2>
             <p class="live-subtitle">Get ready — TRAIN4LIFE is going live shortly. Workouts, Bible study, and community in real time.</p>
@@ -415,7 +421,7 @@
     </div>
 
     <!-- ── Live Chat sidebar ── -->
-    {% if live_status == 'live' and sio_enabled and session.get('logged_in') %}
+    {% if live_status == 'live' and viewer_sees_live and sio_enabled and session.get('logged_in') %}
     <div class="live-chat-panel">
       <div class="chat-panel-head">💬 Live Chat</div>
       <div class="chat-msgs" id="chat-msgs">
