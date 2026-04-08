@@ -112,10 +112,144 @@
   }
   .video-call-btn:hover    { background: #c62828; }
   .video-call-btn:disabled { background: #555; cursor: not-allowed; }
+
+  /* ════════════════════════════════════════════════════
+     VIDEO CALL OVERLAY
+     ════════════════════════════════════════════════════ */
+  #call-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 400;
+    background: rgba(8,8,8,0.93);
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem;
+  }
+  #call-overlay.active { display: flex; }
+
+  #remote-video {
+    width: 100%; max-width: 640px; aspect-ratio: 16/9;
+    background: #111; border-radius: 14px; object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .remote-placeholder {
+    width: 100%; max-width: 640px; aspect-ratio: 16/9;
+    background: #111; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 0.75rem;
+  }
+  .remote-avatar {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(34,185,176,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.2rem; font-weight: 900; color: #22b9b0;
+  }
+  .remote-name   { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+  .remote-status { font-size: 0.82rem; color: rgba(255,255,255,0.35); }
+
+  #local-video {
+    position: absolute; bottom: 90px; right: 16px;
+    width: 120px; aspect-ratio: 4/3;
+    background: #000; border-radius: 10px; object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.15);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  }
+
+  .call-controls {
+    display: flex; align-items: center; gap: 1.2rem; margin-top: 0.5rem;
+  }
+  .call-status-text {
+    font-size: 0.88rem; color: rgba(255,255,255,0.45);
+    text-align: center; min-height: 1.2em;
+  }
+  .btn-end-call {
+    background: #e53e3e; color: #fff; border: none;
+    border-radius: 50%; width: 60px; height: 60px;
+    font-size: 1.4rem; cursor: pointer;
+    box-shadow: 0 0 20px rgba(229,62,62,0.5);
+    transition: background 0.2s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-end-call:hover  { background: #c53030; transform: scale(1.05); }
+  .btn-end-call:active { transform: scale(0.95); }
+
+  /* Incoming call toast */
+  #call-incoming-toast {
+    display: none;
+    position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+    z-index: 500; background: #1e1e1e;
+    border: 1px solid rgba(229,62,62,0.5);
+    border-radius: 16px; padding: 1rem 1.4rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+    min-width: 280px; max-width: 90vw;
+    animation: toastIn 0.25s ease;
+  }
+  @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(-12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+  .toast-title  { font-size: 0.75rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #f87171; margin-bottom: 0.5rem; }
+  .toast-caller { font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 0.9rem; }
+  .toast-btns   { display: flex; gap: 0.7rem; }
+  .btn-accept {
+    flex: 1; background: #16a34a; color: #fff; border: none;
+    border-radius: 10px; padding: 0.6rem; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .btn-accept:hover { background: #15803d; }
+  .btn-decline {
+    flex: 1; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+    padding: 0.6rem; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .btn-decline:hover { background: rgba(255,255,255,0.14); }
+
+  .call-ring {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 3px solid rgba(34,185,176,0.15);
+    border-top-color: #22b9b0;
+    animation: spin 1s linear infinite; margin: 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- ── Incoming call toast ── -->
+<div id="call-incoming-toast">
+  <div class="toast-title">📹 Incoming Video Call</div>
+  <div class="toast-caller" id="toast-caller-name">Someone</div>
+  <div class="toast-btns">
+    <button class="btn-accept"  id="toast-accept-btn">✅ Accept</button>
+    <button class="btn-decline" id="toast-decline-btn">✖ Decline</button>
+  </div>
+</div>
+
+<!-- ── Video call overlay ── -->
+<div id="call-overlay">
+  <!-- Waiting / calling state -->
+  <div id="call-waiting" style="text-align:center;">
+    <div class="call-ring"></div>
+    <div style="margin-top:1rem;font-size:1rem;font-weight:700;color:rgba(255,255,255,0.7);">Calling…</div>
+    <div style="font-size:0.82rem;color:rgba(255,255,255,0.35);margin-top:0.4rem;">Waiting for them to answer</div>
+    <button class="btn-end-call" id="cancel-call-btn" style="margin:1.5rem auto 0;" title="Cancel">📵</button>
+  </div>
+
+  <!-- Active call state -->
+  <div id="call-active" style="display:none;width:100%;max-width:640px;padding:0 1rem;position:relative;">
+    <div id="remote-placeholder" class="remote-placeholder">
+      <div class="remote-avatar" id="remote-avatar">?</div>
+      <div class="remote-name" id="remote-name-label">Connecting…</div>
+      <div class="remote-status">Video will appear shortly</div>
+    </div>
+    <video id="remote-video" autoplay playsinline style="display:none;width:100%;max-width:640px;aspect-ratio:16/9;border-radius:14px;object-fit:cover;"></video>
+    <video id="local-video" autoplay muted playsinline></video>
+  </div>
+
+  <!-- Controls (shown in active state) -->
+  <div id="call-controls-row" class="call-controls" style="display:none;">
+    <div class="call-status-text" id="call-status-text">Connected</div>
+  </div>
+  <button class="btn-end-call" id="end-call-btn" style="display:none;" title="End call">📵</button>
+</div>
 
 <div class="chat-topbar">
   <a href="{{ back_url }}" class="chat-back">← Messages</a>
@@ -123,7 +257,7 @@
     <div class="chat-topbar-title">{{ title }}</div>
     <div class="chat-topbar-sub">{{ subtitle }}</div>
   </div>
-  {% if chat_id.startswith('dm:') %}
+  {% if chat_id.startswith('dm:') or chat_id.startswith('mdm:') %}
   <button class="video-call-btn" id="videoBtn">
     📹 Video Call
   </button>
@@ -184,6 +318,25 @@ function playDing() {
     gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + 0.3);
     oscillator.start(_audioCtx.currentTime);
     oscillator.stop(_audioCtx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+function playRingTone() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    var freqs = [880, 0, 880, 0];
+    var t = _audioCtx.currentTime;
+    freqs.forEach(function(f, i) {
+      if (!f) return;
+      var o = _audioCtx.createOscillator(), g = _audioCtx.createGain();
+      o.connect(g); g.connect(_audioCtx.destination);
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0, t + i * 0.25);
+      g.gain.linearRampToValueAtTime(0.4, t + i * 0.25 + 0.05);
+      g.gain.linearRampToValueAtTime(0, t + i * 0.25 + 0.2);
+      o.start(t + i * 0.25); o.stop(t + i * 0.25 + 0.25);
+    });
   } catch(e) {}
 }
 
@@ -322,39 +475,6 @@ function relativeTimestamps() {
   });
 }
 
-function startVideoCall() {
-  var btn = document.getElementById('videoBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Starting\u2026'; }
-  fetch('/api/video/start', {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: chatId}),
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCF9 Video Call'; }
-    if (d.error) { alert('Video call error: ' + d.error); return; }
-    window.open(d.url, '_blank');
-    if (d.message) {
-      seenIds.add(d.message.id);
-      lastSince = d.message.created_at;
-      appendBubble(d.message);
-      scrollBottom();
-      var ph = document.getElementById('emptyMsg');
-      if (ph) ph.remove();
-    }
-  })
-  .catch(function(e){
-    if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCF9 Video Call'; }
-    alert('Could not start video call: ' + (e && e.message ? e.message : 'Try again.'));
-  });
-}
-
-// Wire video call button (avoids relying on inline onclick with global scope lookup)
-var vBtn = document.getElementById('videoBtn');
-if (vBtn) vBtn.addEventListener('click', startVideoCall);
-
 // Enter key to send
 var inp = document.getElementById('messageInput');
 if (inp) {
@@ -363,5 +483,233 @@ if (inp) {
   });
   inp.focus();
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// SOCKETIO — real-time messaging + WebRTC video call signaling
+// ══════════════════════════════════════════════════════════════════════
+{% if sio_enabled %}
+(function(){
+  var sioScript = document.createElement('script');
+  sioScript.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+  sioScript.crossOrigin = 'anonymous';
+  sioScript.onload = function() { initSocket(); };
+  document.head.appendChild(sioScript);
+
+  function initSocket() {
+    var socket = io();
+
+    // ── Track call state ──────────────────────────────────────────────
+    var callState   = 'idle';   // idle | calling | receiving | active
+    var remoteSid   = null;
+    var localStream = null;
+    var pc          = null;
+
+    socket.on('connect', function() {
+      socket.emit('join_chat',      { chat_id: chatId });
+      socket.emit('join_call_room', { chat_id: chatId });
+    });
+
+    // ── Real-time messages ────────────────────────────────────────────
+    socket.on('new_message', function(msg) {
+      if (!msg || !msg.id || seenIds.has(msg.id)) return;
+      seenIds.add(msg.id);
+      if (msg.created_at && (!lastSince || msg.created_at > lastSince)) lastSince = msg.created_at;
+      appendBubble(msg); scrollBottom();
+      if (!msg.is_admin) playDing();
+      var ph = document.getElementById('emptyMsg'); if (ph) ph.remove();
+    });
+
+    // ── Video call button (Jeff initiates) ───────────────────────────
+    var videoBtn = document.getElementById('videoBtn');
+    if (videoBtn) {
+      videoBtn.addEventListener('click', function() {
+        if (callState !== 'idle') return;
+        callState = 'calling';
+        socket.emit('call_invite', { chat_id: chatId });
+        showOverlay('waiting');
+      });
+    }
+
+    // ── Incoming call (member calls Jeff) ────────────────────────────
+    socket.on('call_invite', function(data) {
+      if (callState !== 'idle') {
+        socket.emit('call_decline', { to: data.from });
+        return;
+      }
+      callState = 'receiving';
+      remoteSid = data.from;
+      playRingTone();
+      var toast  = document.getElementById('call-incoming-toast');
+      var nameEl = document.getElementById('toast-caller-name');
+      if (nameEl) nameEl.textContent = data.caller_name || 'Someone';
+      if (toast)  toast.style.display = 'block';
+    });
+
+    document.getElementById('toast-accept-btn').addEventListener('click', function() {
+      hideToast();
+      socket.emit('call_accept', { to: remoteSid });
+      showOverlay('active');
+      setCallStatus('Connecting…');
+    });
+
+    document.getElementById('toast-decline-btn').addEventListener('click', function() {
+      hideToast();
+      socket.emit('call_decline', { to: remoteSid });
+      remoteSid = null;
+      callState = 'idle';
+    });
+
+    // ── Caller: callee accepted ───────────────────────────────────────
+    socket.on('call_accept', async function(data) {
+      if (callState !== 'calling') return;
+      remoteSid = data.from;
+      callState = 'active';
+      showOverlay('active');
+      setCallStatus('Connecting…');
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        attachLocalVideo(localStream);
+        pc = buildPeerConn(socket, remoteSid, chatId);
+        localStream.getTracks().forEach(function(t) { pc.addTrack(t, localStream); });
+        var offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('call_offer', { to: remoteSid, offer: offer });
+        setCallStatus('Ringing…');
+      } catch(err) {
+        setCallStatus('Camera error: ' + err.message);
+        doEndCall();
+      }
+    });
+
+    socket.on('call_decline', function() {
+      if (callState !== 'calling') return;
+      cleanup(); hideOverlay();
+      callState = 'idle'; remoteSid = null;
+      setCallStatus('Call declined.');
+    });
+
+    // ── Callee: receives offer, sends answer ──────────────────────────
+    socket.on('call_offer', async function(data) {
+      if (callState !== 'receiving' && callState !== 'active') return;
+      callState = 'active';
+      remoteSid = data.from;
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        attachLocalVideo(localStream);
+        pc = buildPeerConn(socket, remoteSid, chatId);
+        localStream.getTracks().forEach(function(t) { pc.addTrack(t, localStream); });
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+        var answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('call_answer', { to: remoteSid, answer: answer });
+        setCallStatus('Connected');
+      } catch(err) {
+        setCallStatus('Camera error: ' + err.message);
+        doEndCall();
+      }
+    });
+
+    // ── Caller: receives answer ───────────────────────────────────────
+    socket.on('call_answer', async function(data) {
+      if (!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(function(){});
+      setCallStatus('Connected');
+    });
+
+    // ── ICE candidates ────────────────────────────────────────────────
+    socket.on('call_ice', function(data) {
+      if (pc && data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
+    });
+
+    // ── Call ended by remote ──────────────────────────────────────────
+    socket.on('call_end', function() {
+      if (callState === 'idle') return;
+      cleanup(); hideOverlay(); hideToast();
+      callState = 'idle'; remoteSid = null;
+    });
+
+    // ── End/cancel buttons ────────────────────────────────────────────
+    document.getElementById('end-call-btn').addEventListener('click',    function() { doEndCall(); });
+    document.getElementById('cancel-call-btn').addEventListener('click', function() { doEndCall(); });
+
+    function doEndCall() {
+      socket.emit('call_end', { chat_id: chatId });
+      cleanup(); hideOverlay();
+      callState = 'idle'; remoteSid = null;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    function buildPeerConn(socket, peerSid) {
+      var p = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      p.onicecandidate = function(e) {
+        if (e.candidate) socket.emit('call_ice', { to: peerSid, candidate: e.candidate });
+      };
+      p.ontrack = function(e) {
+        var rv = document.getElementById('remote-video');
+        var rp = document.getElementById('remote-placeholder');
+        if (rv && !rv.srcObject) {
+          rv.style.display = 'block';
+          if (rp) rp.style.display = 'none';
+          rv.srcObject = e.streams[0];
+          rv.play().catch(function(){});
+        }
+        setCallStatus('Connected');
+      };
+      p.onconnectionstatechange = function() {
+        if (p.connectionState === 'disconnected' || p.connectionState === 'failed') {
+          doEndCall();
+        }
+      };
+      return p;
+    }
+
+    function attachLocalVideo(stream) {
+      var lv = document.getElementById('local-video');
+      if (lv) { lv.srcObject = stream; lv.play().catch(function(){}); }
+    }
+
+    function cleanup() {
+      if (pc)          { pc.close();                                           pc          = null; }
+      if (localStream) { localStream.getTracks().forEach(function(t){ t.stop(); }); localStream = null; }
+      var rv = document.getElementById('remote-video'), lv = document.getElementById('local-video');
+      if (rv) { rv.srcObject = null; rv.style.display = 'none'; }
+      if (lv) { lv.srcObject = null; }
+      var rp = document.getElementById('remote-placeholder'); if (rp) rp.style.display = 'flex';
+    }
+
+    function showOverlay(state) {
+      var overlay  = document.getElementById('call-overlay');
+      var waiting  = document.getElementById('call-waiting');
+      var active   = document.getElementById('call-active');
+      var controls = document.getElementById('call-controls-row');
+      var endBtn   = document.getElementById('end-call-btn');
+      overlay.classList.add('active');
+      if (state === 'waiting') {
+        waiting.style.display  = 'block';
+        active.style.display   = 'none';
+        if (controls) controls.style.display = 'none';
+        if (endBtn)   endBtn.style.display   = 'none';
+      } else {
+        waiting.style.display  = 'none';
+        active.style.display   = 'block';
+        if (controls) controls.style.display = 'flex';
+        if (endBtn)   endBtn.style.display   = 'flex';
+      }
+    }
+
+    function hideOverlay() {
+      document.getElementById('call-overlay').classList.remove('active');
+    }
+
+    function hideToast() {
+      var t = document.getElementById('call-incoming-toast'); if (t) t.style.display = 'none';
+    }
+
+    function setCallStatus(msg) {
+      var el = document.getElementById('call-status-text'); if (el) el.textContent = msg;
+    }
+  }
+})();
+{% endif %}
 </script>
 {% endblock %}

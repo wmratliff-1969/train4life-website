@@ -2130,6 +2130,7 @@ def admin_messages_dm(member_email):
         messages=msgs, back_url=url_for('admin_messages_page'),
         post_url=url_for('admin_messages_dm', member_email=member_email),
         chat_id=dm_key,
+        sio_enabled=_SIO_OK,
     )
 
 
@@ -2176,6 +2177,7 @@ def admin_messages_chat(chat_id):
         messages=msgs, back_url=url_for('admin_messages_page'),
         post_url=url_for('admin_messages_chat', chat_id=chat_id),
         chat_id=chat_id,
+        sio_enabled=_SIO_OK,
     )
 
 
@@ -2901,6 +2903,70 @@ if _SIO_OK and socketio:
         chat_id = (data.get('chat_id') or '').strip()
         if chat_id:
             _sio_leave(f'chat:{chat_id}')
+
+    # ── Peer-to-peer video call signaling ────────────────────────────────────
+    # Each DM chat gets a call room: call:<chat_id>
+    # Server only relays — no media touches the server.
+
+    @socketio.on('join_call_room')
+    def _sio_join_call_room(data):
+        chat_id = (data.get('chat_id') or '').strip()
+        if chat_id:
+            _sio_join(f'call:{chat_id}')
+
+    @socketio.on('call_invite')
+    def _sio_call_invite(data):
+        """Caller announces a call to the room (all other participants)."""
+        chat_id     = (data.get('chat_id') or '').strip()
+        caller_name = (session.get('user_name') or session.get('user_email') or 'Someone').split()[0]
+        if chat_id:
+            socketio.emit('call_invite', {
+                'from':        request.sid,
+                'caller_name': caller_name,
+                'chat_id':     chat_id,
+            }, to=f'call:{chat_id}', include_self=False)
+
+    @socketio.on('call_accept')
+    def _sio_call_accept(data):
+        """Callee accepts — sends their sid to the caller."""
+        to = data.get('to')
+        if to:
+            socketio.emit('call_accept', {'from': request.sid}, to=to)
+
+    @socketio.on('call_decline')
+    def _sio_call_decline(data):
+        """Callee declines."""
+        to = data.get('to')
+        if to:
+            socketio.emit('call_decline', {}, to=to)
+
+    @socketio.on('call_offer')
+    def _sio_call_offer(data):
+        """Caller sends WebRTC offer to callee."""
+        to = data.get('to')
+        if to:
+            socketio.emit('call_offer', {'offer': data.get('offer'), 'from': request.sid}, to=to)
+
+    @socketio.on('call_answer')
+    def _sio_call_answer(data):
+        """Callee sends WebRTC answer to caller."""
+        to = data.get('to')
+        if to:
+            socketio.emit('call_answer', {'answer': data.get('answer'), 'from': request.sid}, to=to)
+
+    @socketio.on('call_ice')
+    def _sio_call_ice(data):
+        """Relay ICE candidate between peers."""
+        to = data.get('to')
+        if to:
+            socketio.emit('call_ice', {'candidate': data.get('candidate'), 'from': request.sid}, to=to)
+
+    @socketio.on('call_end')
+    def _sio_call_end(data):
+        """Either party ends the call — notify the whole room."""
+        chat_id = (data.get('chat_id') or '').strip()
+        if chat_id:
+            socketio.emit('call_end', {}, to=f'call:{chat_id}')
 
 
 if __name__ == '__main__':
