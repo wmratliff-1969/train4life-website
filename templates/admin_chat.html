@@ -208,6 +208,40 @@
     animation: spin 1s linear infinite; margin: 0 auto;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Call overlay view mode bar ── */
+  .call-vm-bar {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 2px; padding: 4px 6px;
+    background: rgba(255,255,255,0.04);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0 0 14px 14px; margin-top: 0; margin-bottom: 0.5rem;
+    width: 100%; max-width: 640px;
+  }
+  .vm-btn {
+    background: none; border: none; color: rgba(255,255,255,0.35);
+    cursor: pointer; border-radius: 6px; padding: 4px 7px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s; line-height: 1;
+  }
+  .vm-btn:hover  { color: #fff; background: rgba(255,255,255,0.1); }
+  .vm-btn.active { color: #fff; background: rgba(255,255,255,0.15); }
+  .vm-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-right: 0.3rem; color: rgba(255,255,255,0.2); }
+
+  /* Theater — larger video in overlay */
+  #call-active.vm-theater { max-width: min(95vw, 960px); }
+  #call-active.vm-theater #remote-video,
+  #call-active.vm-theater .remote-placeholder { max-width: min(95vw, 960px); }
+  #call-active.vm-theater .call-vm-bar { max-width: min(95vw, 960px); }
+  #call-active.vm-theater #local-video { width: 150px; }
+
+  #call-active { transition: max-width 0.3s ease; }
+  #call-active #remote-video, #call-active .remote-placeholder { transition: max-width 0.3s ease; }
+
+  #call-overlay:fullscreen, #call-overlay:-webkit-full-screen { background: #000; }
+  #call-overlay:fullscreen #call-active, #call-overlay:-webkit-full-screen #call-active { max-width: 100%; width: 100%; }
+  #call-overlay:fullscreen #remote-video, #call-overlay:-webkit-full-screen #remote-video,
+  #call-overlay:fullscreen .remote-placeholder, #call-overlay:-webkit-full-screen .remote-placeholder { max-width: 100%; }
 </style>
 {% endblock %}
 
@@ -242,6 +276,28 @@
     </div>
     <video id="remote-video" autoplay playsinline style="display:none;width:100%;max-width:640px;aspect-ratio:16/9;border-radius:14px;object-fit:cover;"></video>
     <video id="local-video" autoplay muted playsinline></video>
+
+    <!-- View mode bar -->
+    <div class="call-vm-bar" id="call-vm-bar">
+      <span class="vm-label">View</span>
+      <button class="vm-btn active" data-mode="default" title="Default view">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="8,3 3,3 3,8"/><polyline points="12,3 17,3 17,8"/>
+          <polyline points="8,17 3,17 3,12"/><polyline points="12,17 17,17 17,12"/>
+        </svg>
+      </button>
+      <button class="vm-btn" data-mode="theater" title="Theater mode">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+          <rect x="1" y="4" width="18" height="12" rx="2"/>
+        </svg>
+      </button>
+      <button class="vm-btn" data-mode="fullscreen" title="Fullscreen">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="13,2 18,2 18,7"/><polyline points="7,2 2,2 2,7"/>
+          <polyline points="13,18 18,18 18,13"/><polyline points="7,18 2,18 2,13"/>
+        </svg>
+      </button>
+    </div>
   </div>
 
   <!-- Controls (shown in active state) -->
@@ -636,7 +692,41 @@ if (inp) {
       socket.emit('call_end', { chat_id: chatId });
       cleanup(); hideOverlay();
       callState = 'idle'; remoteSid = null;
+      setCallViewMode('default');
     }
+
+    // ── Call overlay view modes ───────────────────────────────────────
+    var callCurrentMode = 'default';
+    var callVmBar = document.getElementById('call-vm-bar');
+    if (callVmBar) {
+      callVmBar.querySelectorAll('.vm-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { setCallViewMode(btn.getAttribute('data-mode')); });
+      });
+    }
+    function setCallViewMode(mode) {
+      if (callVmBar) {
+        callVmBar.querySelectorAll('.vm-btn').forEach(function(b) { b.classList.remove('active'); });
+        var ab = callVmBar.querySelector('[data-mode="' + mode + '"]');
+        if (ab) ab.classList.add('active');
+      }
+      var ca = document.getElementById('call-active');
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      }
+      callCurrentMode = mode;
+      if (ca) { ca.classList.remove('vm-theater'); if (mode === 'theater') ca.classList.add('vm-theater'); }
+      if (mode === 'fullscreen') {
+        var ol = document.getElementById('call-overlay');
+        if (ol) { var req = ol.requestFullscreen || ol.webkitRequestFullscreen; if (req) req.call(ol); }
+      }
+    }
+    function onCallFsChange() {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && callCurrentMode === 'fullscreen') {
+        setCallViewMode('default');
+      }
+    }
+    document.addEventListener('fullscreenchange', onCallFsChange);
+    document.addEventListener('webkitfullscreenchange', onCallFsChange);
 
     // ── Helpers ───────────────────────────────────────────────────────
     function buildPeerConn(socket, peerSid) {
