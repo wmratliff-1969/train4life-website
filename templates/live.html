@@ -259,11 +259,9 @@
 
 <div class="live-page">
 
+  {% if live_status != 'live' %}
   <div class="live-header">
-    {% if live_status == 'live' %}
-      <h1 style="color:#f87171;">🔴 LIVE NOW</h1>
-      <p>TRAIN4LIFE is broadcasting live — join now!</p>
-    {% elif live_status == 'countdown' %}
+    {% if live_status == 'countdown' %}
       <h1 style="color:#FF8888;">🔴 GOING LIVE SOON</h1>
       <p>Countdown to the next TRAIN4LIFE live session</p>
     {% else %}
@@ -271,6 +269,7 @@
       <p>Live workouts &amp; Bible study — Monday &amp; Wednesday, 6AM CT</p>
     {% endif %}
   </div>
+  {% endif %}
 
   <div class="live-layout">
 

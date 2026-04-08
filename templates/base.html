@@ -1433,8 +1433,8 @@
     </div>
   </nav>
 
-  <!-- ===== LIVE STATUS BAR (hidden when off) ===== -->
-  {% if live_status != 'off' %}
+  <!-- ===== LIVE STATUS BAR (hidden when off, and on /live itself) ===== -->
+  {% if live_status != 'off' and request.endpoint != 'live' %}
   <a href="{{ live_stream_url if live_stream_url and live_status == 'live' else '/live' }}"
      {% if live_stream_url and live_status == 'live' %}target="_blank" rel="noopener noreferrer"{% endif %}
      id="live-status-bar" class="bar-{{ live_status }}">
