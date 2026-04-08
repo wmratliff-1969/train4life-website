@@ -42,6 +42,7 @@
   .live-player { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; }
   .live-player iframe, .live-player video {
     position: absolute; inset: 0; width: 100%; height: 100%; border: none;
+    object-fit: contain; /* contain preserves aspect ratio for any resolution incl. 4K */
   }
 
   /* Connecting overlay */
