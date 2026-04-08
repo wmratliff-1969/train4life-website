@@ -279,8 +279,15 @@
       try{
         setStatus('Requesting camera…');
         localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-        if(previewVideo){previewVideo.srcObject=localStream;previewVideo.style.display='block';}
+
+        // Show the video element first (before assigning srcObject) so the
+        // browser doesn't defer rendering on a hidden element.
         if(previewPlaceholder)previewPlaceholder.style.display='none';
+        if(previewVideo){
+          previewVideo.style.display='block';
+          previewVideo.srcObject=localStream;
+          previewVideo.play().catch(function(e){console.warn('Preview play error:',e);});
+        }
 
         // MediaRecorder for replay
         try{
@@ -313,7 +320,7 @@
       if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
       Object.keys(peerConns).forEach(function(sid){peerConns[sid].close();});
       peerConns={};
-      if(previewVideo){previewVideo.srcObject=null;previewVideo.style.display='none';}
+      if(previewVideo){previewVideo.pause();previewVideo.srcObject=null;previewVideo.style.display='none';}
       if(previewPlaceholder)previewPlaceholder.style.display='flex';
       socket.emit('stop_broadcast');
       isLive=false;
