@@ -82,7 +82,7 @@
   .vm-btn.active { color: #fff; background: rgba(255,255,255,0.15); }
   .vm-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-right: 0.3rem; color: rgba(255,255,255,0.2); }
 
-  /* Theater — expand the admin page width */
+  /* Fullscreen */
   #preview-player-wrap:fullscreen,
   #preview-player-wrap:-webkit-full-screen {
     background: #000;
@@ -93,8 +93,17 @@
     flex: 1; aspect-ratio: unset; border-radius: 0; margin-bottom: 0;
   }
 
-  .a-page { transition: max-width 0.3s ease; }
-  body.vm-theater-admin .a-page { max-width: 960px !important; }
+  /* Theater — break the preview out of the narrow .a-page column to 90vw.
+     margin-left:50% moves the element's left edge to the parent's midpoint;
+     translateX(-50%) pulls it back by half its own width → viewport-centered. */
+  #preview-player-wrap {
+    transition: width 0.35s ease, margin-left 0.35s ease, transform 0.35s ease;
+  }
+  body.vm-theater-admin #preview-player-wrap {
+    width: 90vw;
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }
 </style>
 {% endblock %}
 
