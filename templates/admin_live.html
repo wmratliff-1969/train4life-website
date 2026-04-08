@@ -93,8 +93,8 @@
     flex: 1; aspect-ratio: unset; border-radius: 0; margin-bottom: 0;
   }
 
-  /* Theater — fixed 90vw overlay. The player floats above the page so
-     nothing below (controls, form) moves at all. ESC or Default exits. */
+  /* Theater — fixed 90vw overlay. The player (+ controls inside it) floats
+     above the page; nothing outside the wrap moves at all. ESC exits. */
   body.vm-theater-admin::before {
     content: '';
     position: fixed;
@@ -113,6 +113,20 @@
     background: #000;
     border-radius: 10px;
     box-shadow: 0 20px 80px rgba(0,0,0,0.95);
+  }
+  /* Controls footer inside the theater overlay */
+  body.vm-theater-admin .webrtc-controls {
+    padding: 0.75rem 1rem;
+    background: #111;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    border-radius: 0 0 10px 10px;
+  }
+  body.vm-theater-admin #webrtc-status {
+    display: none; /* status text hidden in theater; controls have enough info */
+  }
+  /* Card header becomes orphaned in theater (wrap is fixed); hide it */
+  body.vm-theater-admin .webrtc-card-head {
+    visibility: hidden;
   }
 </style>
 {% endblock %}
@@ -159,14 +173,15 @@
         </svg>
       </button>
     </div>
-    </div><!-- /#preview-player-wrap -->
-
+    <!-- Controls live inside the wrap so they travel with the theater overlay -->
     <div class="webrtc-controls">
       <button class="btn-go-live" id="go-live-btn">🔴 GO LIVE</button>
       <button class="btn-stop-live" id="stop-btn">⏹ STOP STREAM</button>
       <div class="viewer-badge" id="viewer-badge">👁 <strong id="viewer-count">0</strong> watching</div>
     </div>
     <div class="webrtc-status" id="webrtc-status">Ready — click GO LIVE to start broadcasting to members.</div>
+    </div><!-- /#preview-player-wrap -->
+
   </div>
   <!-- ══════════════════════════════════════════════════════════════════════ -->
 
