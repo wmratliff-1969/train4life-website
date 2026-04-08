@@ -1,0 +1,142 @@
+{% extends "admin_base.html" %}
+{% block title %}Live Controls — TRAIN4LIFE Admin{% endblock %}
+{% block nav_live %}active{% endblock %}
+
+{% block body %}
+<div class="a-page" style="max-width:660px;">
+
+  <div class="a-page-header">
+    <div class="a-breadcrumb"><a href="/admin/dashboard">Dashboard</a> / Live Controls</div>
+    <h1>Live Controls</h1>
+    <p>Changes take effect immediately — no deploy needed.</p>
+  </div>
+
+  {% if saved %}
+  <div class="a-alert a-alert-success">✅ Saved! Changes are live now.</div>
+  {% endif %}
+
+  <form method="POST">
+    <div class="a-card">
+      <div class="a-card-head">Status</div>
+      <div class="a-radio-group">
+
+        <label class="a-radio-card opt-off">
+          <input type="radio" name="status" value="off"
+            {% if live_status == 'off' %}checked{% endif %}>
+          <div class="a-radio-inner">
+            <div class="a-radio-icon">⚫</div>
+            <div class="a-radio-title">Off Air</div>
+            <div class="a-radio-desc">No show scheduled</div>
+          </div>
+        </label>
+
+        <label class="a-radio-card opt-soon">
+          <input type="radio" name="status" value="countdown"
+            {% if live_status == 'countdown' %}checked{% endif %}>
+          <div class="a-radio-inner">
+            <div class="a-radio-icon">⏳</div>
+            <div class="a-radio-title">Countdown</div>
+            <div class="a-radio-desc">Show scheduled</div>
+          </div>
+        </label>
+
+        <label class="a-radio-card opt-live">
+          <input type="radio" name="status" value="live"
+            {% if live_status == 'live' %}checked{% endif %}>
+          <div class="a-radio-inner">
+            <div class="a-radio-icon">🔴</div>
+            <div class="a-radio-title">Live Now</div>
+            <div class="a-radio-desc">ON AIR</div>
+          </div>
+        </label>
+
+      </div>
+    </div>
+
+    <div class="a-card" style="margin-top:14px;">
+      <div class="a-card-head">Show Timer For</div>
+      <div class="a-radio-group timer-group">
+
+        <label class="a-radio-card opt-both">
+          <input type="radio" name="timer_for" value="both"
+            {% if live_timer_for == 'both' or not live_timer_for %}checked{% endif %}>
+          <div class="a-radio-inner">
+            <div class="a-radio-icon">📺</div>
+            <div class="a-radio-title">Both</div>
+            <div class="a-radio-desc">Express + Bible Bootcamp</div>
+          </div>
+        </label>
+
+        <label class="a-radio-card opt-express">
+          <input type="radio" name="timer_for" value="express"
+            {% if live_timer_for == 'express' %}checked{% endif %}>
+          <div class="a-radio-inner">
+            <div class="a-radio-icon">⚡</div>
+            <div class="a-radio-title">Express Only</div>
+            <div class="a-radio-desc">Express side only</div>
+          </div>
+        </label>
+
+        <label class="a-radio-card opt-bible">
+          <input type="radio" name="timer_for" value="bible"
+            {% if live_timer_for == 'bible' %}checked{% endif %}>
+          <div class="a-radio-inner">
+            <div class="a-radio-icon">📖</div>
+            <div class="a-radio-title">Bible Bootcamp Only</div>
+            <div class="a-radio-desc">Bible Bootcamp side only</div>
+          </div>
+        </label>
+
+      </div>
+    </div>
+
+    <div class="a-card" style="margin-top:14px;">
+      <div class="a-form-group" style="margin-bottom:0;">
+        <label class="a-label">Showtime (for countdown)</label>
+        <div class="a-hint">ISO format with timezone. Example: 2026-04-07T06:00:00-05:00 (Mon 6AM CT)</div>
+        <input class="a-input a-input-mono" type="text" name="countdown_to"
+          value="{{ live_countdown_to }}"
+          placeholder="2026-04-07T06:00:00-05:00">
+      </div>
+    </div>
+
+    <div class="a-card" style="margin-top:14px;">
+      <div class="a-form-group" style="margin-bottom:0;">
+        <label class="a-label">Status Bar Message <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
+        <div class="a-hint">Leave blank to use the default message for each state.</div>
+        <input class="a-input" type="text" name="message"
+          value="{{ live_message }}"
+          placeholder="e.g. Special event tonight at 7PM CT!">
+      </div>
+    </div>
+
+    <div class="a-card" style="margin-top:14px;">
+      <div class="a-form-group" style="margin-bottom:0;">
+        <label class="a-label">Stream URL <span style="font-weight:400;color:#9ca3af;">(required for Live Now)</span></label>
+        <div class="a-hint">Where are you broadcasting? Paste your YouTube Live, Facebook Live, or Zoom link here. Members click the LIVE button and go directly to this URL.</div>
+        <input class="a-input" type="url" name="stream_url"
+          value="{{ live_stream_url or '' }}"
+          placeholder="https://youtube.com/live/...">
+      </div>
+    </div>
+
+    <div style="margin-top:20px; display:flex; gap:10px; align-items:center;">
+      <button type="submit" class="a-btn a-btn-primary">Save &amp; Apply Now</button>
+      <a href="/admin/dashboard" class="a-btn a-btn-ghost">Cancel</a>
+    </div>
+
+  </form>
+
+  <!-- Workflow guide -->
+  <div class="a-card" style="margin-top:28px; background:#fafafa;">
+    <div class="a-card-head">Workflow</div>
+    <ol style="font-size:0.83rem; color:#71717a; line-height:2.2; padding-left:1.3rem;">
+      <li>Set showtime → select <strong style="color:#111;">Countdown</strong> → Save</li>
+      <li>When show starts → select <strong style="color:#111;">Live Now</strong> → Save</li>
+      <li>After show → select <strong style="color:#111;">Off Air</strong> → clear showtime → Save</li>
+    </ol>
+  </div>
+
+</div>
+
+{% endblock %}

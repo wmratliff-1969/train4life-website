@@ -13,7 +13,7 @@
     <div class="player-wrap">
       {% if player == 'vhx' %}
       <iframe
-        src="https://embed.vhx.tv/videos/{{ video.vhx_video_id }}?autoplay=1&color=22b9b0"
+        src="https://embed.vhx.tv/videos/{{ video.vhx_video_id }}?autoplay=1&color=CC0000{% if vhx_auth_token %}&auth_token={{ vhx_auth_token }}{% endif %}"
         title="{{ video.title }}"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen

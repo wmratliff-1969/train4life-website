@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+{% block title %}LIVE — TRAIN4LIFE{% endblock %}
+
+{% block content %}
+<style>
+  .live-page {
+    min-height: 100vh;
+    background: #0e0e0e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 100px 1.5rem 4rem;
+  }
+
+  .live-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .live-header h1 {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 900;
+    letter-spacing: 3px;
+    margin-bottom: 0.4rem;
+  }
+
+  .live-header p {
+    font-size: 1rem;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1px;
+  }
+
+  /* ── Main card ── */
+  .live-card {
+    width: 100%;
+    max-width: 760px;
+    background: #1a1a1a;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .live-card.is-live {
+    border-color: rgba(229,62,62,0.5);
+    box-shadow: 0 0 40px rgba(229,62,62,0.2);
+  }
+
+  .live-card.is-countdown {
+    border-color: rgba(204,0,0,0.4);
+    box-shadow: 0 0 30px rgba(204,0,0,0.15);
+  }
+
+  /* Player area */
+  .live-player {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+  }
+
+  .live-player iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+
+  /* Off-air / countdown placeholder */
+  .live-offair {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: linear-gradient(135deg, #1a0808 0%, #0e0e0e 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+  }
+
+  .live-offair-icon {
+    font-size: 3.5rem;
+    opacity: 0.4;
+  }
+
+  .live-offair-text {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* ── Countdown hero (shown on countdown state) ── */
+  .countdown-hero {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: linear-gradient(135deg, #220000 0%, #0e0e0e 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+  }
+
+  .countdown-hero-label {
+    font-size: 1rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .countdown-hero-clock {
+    font-size: clamp(3rem, 10vw, 5.5rem);
+    font-weight: 900;
+    color: #FF4444;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 40px rgba(255,60,60,0.5);
+    line-height: 1;
+  }
+
+  .countdown-hero-sub {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 1px;
+  }
+
+  /* Card body */
+  .live-card-body {
+    padding: 1.75rem 2rem;
+  }
+
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0.35rem 0.9rem;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+  }
+
+  .live-badge.on {
+    background: rgba(229,62,62,0.15);
+    color: #f87171;
+    border: 1px solid rgba(229,62,62,0.35);
+  }
+
+  .live-badge.soon {
+    background: rgba(204,0,0,0.1);
+    color: #FF8888;
+    border: 1px solid rgba(204,0,0,0.3);
+    animation: badgePulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes badgePulse {
+    0%, 100% { box-shadow: none; }
+    50%       { box-shadow: 0 0 10px rgba(204,0,0,0.4); }
+  }
+
+  .live-badge.off {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .live-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .live-badge.on .live-badge-dot {
+    background: #f87171;
+    box-shadow: 0 0 5px rgba(248,113,113,0.8);
+    animation: livePulse 1.2s ease-in-out infinite;
+  }
+
+  .live-badge.soon .live-badge-dot {
+    background: #FF6666;
+    box-shadow: 0 0 5px rgba(255,100,100,0.8);
+    animation: livePulse 1.2s ease-in-out infinite;
+  }
+
+  .live-badge.off .live-badge-dot {
+    background: rgba(255,255,255,0.25);
+  }
+
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  .live-card-body h2 {
+    font-size: 1.55rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.5px;
+  }
+
+  .live-card-body .live-subtitle {
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+  }
+
+  .live-schedule {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.88rem;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 1.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .live-schedule span { color: rgba(255,255,255,0.85); font-weight: 600; }
+
+  .btn-join {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 1rem;
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    border-radius: 10px;
+    background: #e53e3e;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    box-shadow: 0 0 20px rgba(229,62,62,0.4);
+  }
+
+  .btn-join:hover {
+    background: #c53030;
+    box-shadow: 0 0 30px rgba(229,62,62,0.6);
+    color: #fff;
+  }
+
+  /* ── Notify / remind form ── */
+  .notify-section {
+    width: 100%;
+    max-width: 760px;
+    margin-top: 2rem;
+  }
+
+  .notify-card {
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 1.75rem 2rem;
+  }
+
+  .notify-card.is-countdown {
+    border-color: rgba(204,0,0,0.25);
+  }
+
+  .notify-card h3 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.5px;
+  }
+
+  .notify-card p {
+    font-size: 0.88rem;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .notify-form {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .notify-form input[type="email"] {
+    flex: 1;
+    min-width: 220px;
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: #fff;
+    font-size: 0.95rem;
+    font-family: 'Cabin', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .notify-form input[type="email"]:focus {
+    border-color: rgba(229,62,62,0.5);
+  }
+
+  .btn-notify {
+    background: rgba(229,62,62,0.12);
+    border: 1px solid rgba(229,62,62,0.4);
+    color: #f87171;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: 'Cabin', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-notify:hover {
+    background: rgba(229,62,62,0.22);
+    border-color: rgba(229,62,62,0.6);
+  }
+
+  /* ── Generic D:H:M:S countdown (off-air state) ── */
+  .countdown-row {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .countdown-unit {
+    text-align: center;
+    min-width: 60px;
+  }
+
+  .countdown-num {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .countdown-label {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .countdown-sep {
+    font-size: 2rem;
+    font-weight: 900;
+    color: rgba(255,255,255,0.2);
+    align-self: flex-start;
+    padding-top: 4px;
+  }
+
+  @media (max-width: 600px) {
+    .live-card-body { padding: 1.25rem; }
+    .live-header h1 { font-size: 1.8rem; }
+    .notify-card { padding: 1.25rem; }
+    .countdown-hero-clock { font-size: 2.8rem; }
+  }
+</style>
+
+<div class="live-page">
+
+  <div class="live-header">
+    {% if live_status == 'live' %}
+      <h1 style="color:#f87171;">🔴 LIVE NOW</h1>
+      <p>TRAIN4LIFE is broadcasting live. Join now!</p>
+    {% elif live_status == 'countdown' %}
+      <h1 style="color:#FF8888;">🔴 GOING LIVE SOON</h1>
+      <p>Countdown to the next TRAIN4LIFE live session</p>
+    {% else %}
+      <h1>LIVE</h1>
+      <p>Live workouts &amp; Bible study — Monday &amp; Wednesday, 6AM CT</p>
+    {% endif %}
+  </div>
+
+  <!-- ── Main card ── -->
+  <div class="live-card {% if live_status == 'live' %}is-live{% elif live_status == 'countdown' %}is-countdown{% endif %}">
+
+    {% if live_status == 'live' %}
+      <!-- Live player -->
+      <div class="live-player">
+        {# Replace the src with your actual live stream embed URL #}
+        <iframe src="https://www.youtube.com/embed/live_stream?channel=UCxxxxxx&autoplay=1"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+      </div>
+
+    {% elif live_status == 'countdown' %}
+      <!-- Countdown hero -->
+      <div class="countdown-hero">
+        <div class="countdown-hero-label">Going Live In</div>
+        <div class="countdown-hero-clock" id="page-countdown">--:--:--</div>
+        <div class="countdown-hero-sub" id="page-countdown-sub">Loading…</div>
+      </div>
+
+    {% else %}
+      <!-- Off-air placeholder -->
+      <div class="live-offair">
+        <div class="live-offair-icon">📡</div>
+        <div class="live-offair-text">Off Air</div>
+      </div>
+    {% endif %}
+
+    <div class="live-card-body">
+
+      {% if live_status == 'live' %}
+        <div class="live-badge on">
+          <span class="live-badge-dot"></span> On Air
+        </div>
+        <h2>TRAIN4LIFE is Live!</h2>
+        <p class="live-subtitle">Join the live session now — workouts, Bible study, and community in real time.</p>
+        <a href="https://www.youtube.com/channel/UCxxxxxx/live" target="_blank" rel="noopener" class="btn-join">
+          🔴 TAP TO JOIN NOW
+        </a>
+
+      {% elif live_status == 'countdown' %}
+        <div class="live-badge soon">
+          <span class="live-badge-dot"></span> Going Live Soon
+        </div>
+        <h2>Show Starts Soon!</h2>
+        <p class="live-subtitle">
+          Get ready — TRAIN4LIFE is going live shortly. Workouts, Bible study, and community in real time.
+        </p>
+        <a href="https://www.youtube.com/channel/UCxxxxxx/live" target="_blank" rel="noopener" class="btn-join">
+          🔔 GET NOTIFIED &amp; WATCH LIVE
+        </a>
+
+      {% else %}
+        <div class="live-badge off">
+          <span class="live-badge-dot"></span> Off Air
+        </div>
+        <h2>Not Currently Live</h2>
+        <p class="live-subtitle">
+          Join us live for workouts, Bible study, and community — streamed direct from the TRAIN4LIFE studio.
+          New sessions every Monday &amp; Wednesday.
+        </p>
+        <div class="live-schedule">
+          📅 &nbsp;<span>Next Live:</span>&nbsp; Monday &amp; Wednesday at 6AM CT
+        </div>
+
+        <!-- Generic countdown to next scheduled session -->
+        <div class="countdown-row">
+          <div class="countdown-unit">
+            <div class="countdown-num" id="cd-days">--</div>
+            <div class="countdown-label">Days</div>
+          </div>
+          <div class="countdown-sep">:</div>
+          <div class="countdown-unit">
+            <div class="countdown-num" id="cd-hours">--</div>
+            <div class="countdown-label">Hours</div>
+          </div>
+          <div class="countdown-sep">:</div>
+          <div class="countdown-unit">
+            <div class="countdown-num" id="cd-mins">--</div>
+            <div class="countdown-label">Mins</div>
+          </div>
+          <div class="countdown-sep">:</div>
+          <div class="countdown-unit">
+            <div class="countdown-num" id="cd-secs">--</div>
+            <div class="countdown-label">Secs</div>
+          </div>
+        </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- ── Remind / Notify Me (when not live) ── -->
+  {% if live_status != 'live' %}
+  <div class="notify-section">
+    <div class="notify-card {% if live_status == 'countdown' %}is-countdown{% endif %}">
+      <h3>🔔 {% if live_status == 'countdown' %}Remind Me — Going Live Soon!{% else %}Notify Me When Live{% endif %}</h3>
+      <p>
+        {% if live_status == 'countdown' %}
+          The show starts very soon. Enter your email and we'll send you a heads-up right now.
+        {% else %}
+          Enter your email and we'll send you a reminder 30 minutes before every live session.
+        {% endif %}
+      </p>
+      <form class="notify-form" id="notifyForm" onsubmit="handleNotify(event)">
+        <input type="email" id="notifyEmail" placeholder="your@email.com" required autocomplete="email">
+        <button type="submit" class="btn-notify">🔔 {% if live_status == 'countdown' %}Remind Me Now{% else %}Notify Me{% endif %}</button>
+      </form>
+      <div id="notify-success" style="display:none; margin-top:1rem; color:#4ade80; font-size:0.9rem; font-weight:600;">
+        ✅ You're on the list! We'll remind you before the next live session.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  // ── Countdown: exact target (when LIVE_STATUS=countdown) ──
+  {% if live_status == 'countdown' and live_countdown_to %}
+  (function() {
+    var goLiveAt = new Date("{{ live_countdown_to }}");
+    var clock = document.getElementById('page-countdown');
+    var sub   = document.getElementById('page-countdown-sub');
+
+    function update() {
+      var diff = goLiveAt - new Date();
+      if (diff <= 0) {
+        if (clock) clock.textContent = 'LIVE NOW!';
+        if (sub)   sub.textContent   = 'The show has started — join now!';
+        return;
+      }
+      var h = Math.floor(diff / 3600000);
+      var m = Math.floor((diff % 3600000) / 60000);
+      var s = Math.floor((diff % 60000) / 1000);
+      if (clock) clock.textContent = h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+
+      // Format a human-readable sub-label
+      var parts = [];
+      if (h > 0) parts.push(h + (h === 1 ? ' hour' : ' hours'));
+      if (m > 0) parts.push(m + (m === 1 ? ' minute' : ' minutes'));
+      if (h === 0 && s > 0) parts.push(s + ' seconds');
+      if (sub) sub.textContent = parts.join(', ') + ' until showtime';
+    }
+    setInterval(update, 1000);
+    update();
+  })();
+  {% endif %}
+
+  // ── Countdown to next Mon or Wed 6AM CT (off-air state) ──
+  {% if live_status == 'off' %}
+  function getNextLiveDate() {
+    // CT offset: UTC-5 (CST) or UTC-6 (CDT) — approximate as UTC-5 for simplicity
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const ctMs  = utcMs - 5 * 3600000;
+    const ct    = new Date(ctMs);
+
+    const targets = [1, 3]; // Mon, Wed
+    let best = null;
+
+    for (let offset = 0; offset <= 7; offset++) {
+      const candidate = new Date(ct);
+      candidate.setDate(candidate.getDate() + offset);
+      candidate.setHours(6, 0, 0, 0);
+      if (targets.includes(candidate.getDay()) && candidate > ct) {
+        best = candidate;
+        break;
+      }
+    }
+
+    if (!best) return null;
+    return new Date(best.getTime() + 5 * 3600000);
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function updateCountdown() {
+    const target = getNextLiveDate();
+    if (!target) return;
+    const diff = target - new Date();
+    if (diff <= 0) { location.reload(); return; }
+
+    const days  = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const mins  = Math.floor((diff % 3600000)  / 60000);
+    const secs  = Math.floor((diff % 60000)    / 1000);
+
+    document.getElementById('cd-days').textContent  = pad(days);
+    document.getElementById('cd-hours').textContent = pad(hours);
+    document.getElementById('cd-mins').textContent  = pad(mins);
+    document.getElementById('cd-secs').textContent  = pad(secs);
+  }
+
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+  {% endif %}
+
+  // ── Notify Me form ──
+  function handleNotify(e) {
+    e.preventDefault();
+    const email = document.getElementById('notifyEmail').value.trim();
+    if (!email) return;
+    // Store locally for now; wire to backend later
+    document.getElementById('notifyForm').style.display = 'none';
+    document.getElementById('notify-success').style.display = 'block';
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "admin_base.html" %}
+{% block title %}Dashboard — TRAIN4LIFE Admin{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block body %}
+<div class="a-page">
+
+  <div class="a-page-header">
+    <h1>Dashboard</h1>
+    <p>Welcome back. Here's what's happening with TRAIN4LIFE.</p>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="a-stats">
+    <div class="a-stat">
+      <div class="a-stat-icon">💰</div>
+      <div class="a-stat-val">{{ revenue or '—' }}</div>
+      <div class="a-stat-label">Revenue (MRR)</div>
+    </div>
+    <div class="a-stat">
+      <div class="a-stat-icon">👥</div>
+      <div class="a-stat-val">{{ subscriber_count }}</div>
+      <div class="a-stat-label">Subscribers</div>
+    </div>
+    <div class="a-stat">
+      <div class="a-stat-icon">📱</div>
+      <div class="a-stat-val">{{ app_video_count }}</div>
+      <div class="a-stat-label">App Videos</div>
+    </div>
+    <div class="a-stat">
+      <div class="a-stat-icon">🎬</div>
+      <div class="a-stat-val">{{ total_video_count }}</div>
+      <div class="a-stat-label">Total Videos</div>
+    </div>
+  </div>
+
+  <!-- Live status -->
+  <div class="a-live-bar">
+    {% if live_status == 'live' %}
+      <div class="a-dot a-dot-live"></div>
+      <span class="a-live-bar-label" style="color:#CC0000;font-weight:700;">ON AIR — Live stream active</span>
+    {% elif live_status == 'countdown' %}
+      <div class="a-dot a-dot-soon"></div>
+      <span class="a-live-bar-label" style="color:#c2410c;">COUNTDOWN — Going live soon</span>
+    {% else %}
+      <div class="a-dot a-dot-off"></div>
+      <span class="a-live-bar-label" style="color:#71717a;">Off air</span>
+    {% endif %}
+    <a href="/admin/live">Change →</a>
+  </div>
+
+  <!-- Nav cards -->
+  <div class="a-nav-cards">
+
+    <a href="/admin/live" class="a-nav-card">
+      <div class="a-nav-card-icon">🔴</div>
+      <div class="a-nav-card-title">Live Controls</div>
+      <div class="a-nav-card-desc">Set status, countdown timer, message</div>
+    </a>
+
+    <a href="/admin/app-content" class="a-nav-card">
+      <div class="a-nav-card-icon">📱</div>
+      <div class="a-nav-card-title">App Content</div>
+      <div class="a-nav-card-desc">Manage iOS app video playlists</div>
+    </a>
+
+    <a href="/resources" class="a-nav-card">
+      <div class="a-nav-card-icon">📄</div>
+      <div class="a-nav-card-title">Resources</div>
+      <div class="a-nav-card-desc">View public PDF &amp; extras library</div>
+    </a>
+
+    <a href="/admin/messages" class="a-nav-card">
+      <div class="a-nav-card-icon">💬</div>
+      <div class="a-nav-card-title">Messages</div>
+      <div class="a-nav-card-desc">Member DMs, announcements &amp; group chats</div>
+    </a>
+
+    <div class="a-nav-card disabled">
+      <div class="a-nav-card-icon">👥</div>
+      <div class="a-nav-card-title">Customers</div>
+      <div class="a-nav-card-desc">Coming soon</div>
+    </div>
+
+    <a href="/" class="a-nav-card">
+      <div class="a-nav-card-icon">🌐</div>
+      <div class="a-nav-card-title">View Site</div>
+      <div class="a-nav-card-desc">Go to homepage</div>
+    </a>
+
+  </div>
+
+</div>
+{% endblock %}

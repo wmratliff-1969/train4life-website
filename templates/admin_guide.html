@@ -1,0 +1,49 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Guide — TRAIN4LIFE Admin{% endblock %}
+{% block nav_guide %}active{% endblock %}
+
+{% block body %}
+<div style="max-width:none; padding:32px 24px 0;">
+
+  <div class="a-page-header">
+    <div class="a-breadcrumb"><a href="/admin/dashboard">Dashboard</a> / Guide</div>
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h1>📖 Admin User Guide</h1>
+        <p>Complete reference for managing TRAIN4LIFE</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+        <span style="font-size:0.72rem; font-weight:700; letter-spacing:0.12em; color:#ef4444; background:#fef2f2; border:1px solid #fecaca; padding:4px 10px; border-radius:6px;">
+          🔒 CONFIDENTIAL — ADMIN ONLY
+        </span>
+        <a href="/static/admin/TRAIN4LIFE_Admin_Guide.pdf" download
+           class="a-btn a-btn-primary" style="white-space:nowrap;">
+          ⬇ Download PDF
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="padding:0 24px;">
+  <iframe
+    src="/static/admin/TRAIN4LIFE_Admin_Guide.pdf#zoom=125&pagemode=none"
+    width="100%"
+    height="1100px"
+    style="display:block; border:none; border-radius:12px;">
+    <p style="padding:24px; color:#71717a;">
+      Your browser does not support embedded PDFs.
+      <a href="/static/admin/TRAIN4LIFE_Admin_Guide.pdf" download>Download the PDF</a> to view it.
+    </p>
+  </iframe>
+</div>
+
+<div style="padding:16px 24px 40px; text-align:center;">
+  <a href="/static/admin/TRAIN4LIFE_Admin_Guide.pdf" download
+     class="a-btn a-btn-primary">
+    ⬇ Download PDF
+  </a>
+</div>
+
+{% endblock %}

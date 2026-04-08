@@ -1,6 +1,6 @@
 from flask import (Flask, render_template, redirect, url_for, session,
                    request, jsonify, flash, Response)
-import os, json, hashlib, datetime, re, base64
+import os, json, hashlib, datetime, re, base64, uuid, threading, time
 from collections import defaultdict
 from functools import wraps
 try:
@@ -19,6 +19,19 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'train4life-secret-2026-change-in-prod')
 
+import markupsafe
+@app.template_filter('linkify')
+def linkify_filter(text):
+    """Turn URLs in text into clickable <a> tags."""
+    escaped = str(markupsafe.escape(text))
+    linked  = re.sub(
+        r'(https?://[^\s<>"]+)',
+        r'<a href="\1" target="_blank" rel="noopener" style="color:#4aecd4;text-decoration:underline;">\1</a>',
+        escaped,
+    )
+    return markupsafe.Markup(linked)
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
+
 # Stripe config
 STRIPE_PUBLIC_KEY  = os.environ.get('STRIPE_PUBLIC_KEY', '')
 STRIPE_SECRET_KEY  = os.environ.get('STRIPE_SECRET_KEY', '')
@@ -27,6 +40,36 @@ if STRIPE_AVAILABLE and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
 BASE_URL = os.environ.get('BASE_URL', 'http://localhost:5001')
+
+# ── Live stream status ────────────────────────────────────────────────────────
+#
+# TO GO LIVE:
+# 1. Set LIVE_COUNTDOWN_TO to your showtime
+#    (ISO format: 2026-04-04T18:00:00-06:00)
+# 2. Set LIVE_STATUS = "countdown"
+# 3. Bar shows live countdown to all visitors
+# 4. When show starts: LIVE_STATUS = "live"
+# 5. After show: LIVE_STATUS = "off"
+#    clear LIVE_COUNTDOWN_TO
+#
+# LIVE_STATUS values: "off" | "countdown" | "live"
+# Change in Railway Variables dashboard — no deploy needed
+LIVE_STATUS = os.environ.get('LIVE_STATUS', 'off').strip().lower()
+if LIVE_STATUS not in ('off', 'countdown', 'live'):
+    LIVE_STATUS = 'off'
+IS_LIVE = (LIVE_STATUS == 'live')  # backwards-compat for /live page
+
+# Countdown target — ISO datetime string (e.g. "2026-04-04T18:00:00-06:00")
+# Only used when LIVE_STATUS = "countdown"
+LIVE_COUNTDOWN_TO = os.environ.get('LIVE_COUNTDOWN_TO', '').strip()
+
+# Status bar message — auto-set by state, or override with LIVE_STATUS_MESSAGE
+_default_messages = {
+    'off':       '🔴 LIVE — Red border = ready  |  Red glow = coming soon  |  Solid red = ON AIR NOW',
+    'countdown': '🔴 GOING LIVE IN',
+    'live':      '🔴 WE ARE LIVE RIGHT NOW!',
+}
+LIVE_STATUS_MESSAGE = os.environ.get('LIVE_STATUS_MESSAGE', '') or _default_messages[LIVE_STATUS]
 
 # Stripe Price IDs (set these after creating products in Stripe dashboard)
 STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '')
@@ -175,7 +218,7 @@ def _vhx_auth_header():
     return {'Authorization': f'Basic {creds}'}
 
 def _fetch_vhx_videos(per_page=100, page=1):
-    """Fetch a page of videos from the VHX API."""
+    """Fetch a single page of videos from the VHX API (kept for compatibility)."""
     if not _HTTP_OK:
         return []
     try:
@@ -188,6 +231,161 @@ def _fetch_vhx_videos(per_page=100, page=1):
         return data.get('_embedded', {}).get('videos', [])
     except Exception:
         return []
+
+
+def _vhx_get_customer(email):
+    """Look up a VHX customer by email. Returns customer dict or None.
+
+    VHX API quirk: GET /customers?email=X returns {"total":1} but no _embedded.
+    Workaround: if total > 0, fetch all customers and match by email client-side.
+    With ~78 customers this fits in one page.
+    """
+    if not _HTTP_OK or not email:
+        return None
+    email = email.strip().lower()
+    try:
+        # Step 1: confirm customer exists via email filter
+        r = _http.get(f'{VHX_BASE_URL}/customers',
+                      params={'email': email},
+                      headers=_vhx_auth_header(), timeout=10)
+        if not r.ok:
+            return None
+        data = r.json()
+        # If _embedded came back (future API fix), use it directly
+        customers = data.get('_embedded', {}).get('customers', [])
+        if customers:
+            return customers[0]
+        # If total == 0, customer doesn't exist
+        if not data.get('total', 0):
+            return None
+        # Step 2: email filter confirmed total > 0 but gave no data.
+        # Fetch full customer list and match by email.
+        page = 1
+        while True:
+            r2 = _http.get(f'{VHX_BASE_URL}/customers',
+                           params={'per_page': 100, 'page': page},
+                           headers=_vhx_auth_header(), timeout=15)
+            if not r2.ok:
+                break
+            d2 = r2.json()
+            for c in d2.get('_embedded', {}).get('customers', []):
+                if (c.get('email') or '').strip().lower() == email:
+                    return c
+            total = d2.get('total', 0)
+            fetched = page * 100
+            if fetched >= total:
+                break
+            page += 1
+    except Exception:
+        pass
+    return None
+
+
+def _vhx_customer_is_subscribed(customer):
+    """Return True if a VHX customer has an active subscription.
+
+    Real VHX customer object uses:
+      subscribed_to_site: true/false
+      plan: "standard" (string, not object)
+    """
+    if not customer:
+        return False
+    # Primary field from real VHX API response
+    if customer.get('subscribed_to_site'):
+        return True
+    # plan is a string like "standard" when subscribed
+    plan = customer.get('plan')
+    if plan and isinstance(plan, str) and plan not in ('', 'free', 'none'):
+        return True
+    # Fallback for nested object shape (in case it varies)
+    if isinstance(plan, dict) and plan.get('active'):
+        return True
+    return False
+
+
+def _vhx_get_auth_token(customer_href):
+    """Get a signed JWT auth token for a VHX customer. Returns token string or None."""
+    if not _HTTP_OK or not customer_href:
+        return None
+    try:
+        r = _http.get(f'{customer_href}/authorize',
+                      headers=_vhx_auth_header(), timeout=10)
+        if r.ok:
+            return r.json().get('token')
+    except Exception:
+        pass
+    return None
+
+
+def _vhx_create_customer(email, name=''):
+    """Create a new VHX customer. Returns customer dict or None."""
+    if not _HTTP_OK or not email:
+        return None
+    try:
+        payload = {'email': email}
+        if name:
+            payload['name'] = name
+        r = _http.post(f'{VHX_BASE_URL}/customers',
+                       headers=_vhx_auth_header(),
+                       json=payload, timeout=10)
+        if r.ok:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+
+def _vhx_provision_user(email, users, customer, password_hash=''):
+    """Create or update a users.json entry from a known VHX customer object.
+    Always sets password_hash so first-login sets the user's password."""
+    cid      = str(customer.get('id', ''))
+    chref    = (customer.get('_links') or {}).get('self', {}).get('href', '')
+    is_sub   = _vhx_customer_is_subscribed(customer)
+    if email not in users:
+        users[email] = {
+            'name':       customer.get('name', email.split('@')[0]),
+            'email':      email,
+            'password':   password_hash,
+            'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'plan':       'Monthly' if is_sub else None,
+            'role':       'subscriber' if is_sub else 'free',
+        }
+    else:
+        # Always update password so VHX member's first login sets their password
+        if password_hash:
+            users[email]['password'] = password_hash
+        if is_sub and not users[email].get('plan'):
+            users[email]['plan'] = 'Monthly'
+    users[email]['vhx_customer_id']   = cid
+    users[email]['vhx_customer_href'] = chref
+    return users
+
+
+def _fetch_all_vhx_videos():
+    """Fetch ALL videos from the VHX API, looping through every page."""
+    if not _HTTP_OK:
+        return []
+    all_videos = []
+    page = 1
+    try:
+        while True:
+            r = _http.get(f'{VHX_BASE_URL}/videos',
+                          params={'per_page': 100, 'page': page, 'sort': 'newest'},
+                          headers=_vhx_auth_header(), timeout=30)
+            if not r.ok:
+                break
+            data = r.json()
+            videos = data.get('_embedded', {}).get('videos', [])
+            if not videos:
+                break
+            all_videos.extend(videos)
+            total = data.get('total', 0)
+            if len(all_videos) >= total:
+                break
+            page += 1
+    except Exception:
+        pass
+    return all_videos
 
 def _vhx_video_to_curator(v):
     """Shape a raw VHX API video object into our curator format."""
@@ -239,6 +437,26 @@ def _save_users(users):
 
 def _hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
+
+JEFF_EMAIL = 'jeff@fastfitbootcamps.com'
+
+def _ensure_jeff_account():
+    """Create/update Jeff's member account at startup so it always exists."""
+    users = _load_users()
+    if JEFF_EMAIL not in users:
+        users[JEFF_EMAIL] = {
+            'name':       'Jeff',
+            'email':      JEFF_EMAIL,
+            'password':   '3a95fbcc0358bd08e7fc4e471238e757491825dd1e4cd97ece1ef5b74888e27c',  # Jeff2026
+            'plan':       'express',
+            'created_at': datetime.datetime.utcnow().isoformat(),
+        }
+        _save_users(users)
+    else:
+        # Ensure name is always "Jeff" for this account
+        if users[JEFF_EMAIL].get('name') != 'Jeff':
+            users[JEFF_EMAIL]['name'] = 'Jeff'
+            _save_users(users)
 
 def _current_user():
     """Return the current user's data dict, or None."""
@@ -311,11 +529,172 @@ def _save_posts(posts):
     with open(_forum_path, 'w') as f:
         json.dump(posts, f, indent=2)
 
+# ── Messages helpers ───────────────────────────────────────────────────────────
+_messages_path = os.path.join(_base, 'data', 'messages.json')
+_reads_path    = os.path.join(_base, 'data', 'message_reads.json')
+_easylist_path = os.path.join(_base, 'data', 'easylist_pending.json')
+_msg_lock      = threading.Lock()
+_easylist_lock = threading.Lock()
+_rooms_lock    = threading.Lock()
+_active_rooms  = {}   # chat_id -> {'url', 'room', 'expires_at'}
+
+CHAT_IDS = ['announcements', 'express', 'bible']
+
+def _load_messages():
+    if not os.path.exists(_messages_path):
+        return {c: [] for c in CHAT_IDS}
+    with open(_messages_path) as f:
+        return json.load(f)
+
+def _save_messages(data):
+    with open(_messages_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def _load_reads():
+    if not os.path.exists(_reads_path):
+        return {}
+    with open(_reads_path) as f:
+        return json.load(f)
+
+def _save_reads(data):
+    with open(_reads_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def _post_message(chat_id, sender_id, sender_name, content, is_admin=False):
+    with _msg_lock:
+        data = _load_messages()
+        if chat_id not in data:
+            data[chat_id] = []
+        msg = {
+            'id':          str(uuid.uuid4()),
+            'sender_id':   sender_id,
+            'sender_name': sender_name,
+            'content':     content,
+            'created_at':  datetime.datetime.utcnow().isoformat() + 'Z',
+            'is_admin':    is_admin,
+        }
+        data[chat_id].append(msg)
+        data[chat_id] = data[chat_id][-500:]   # keep last 500 per chat
+        _save_messages(data)
+        return msg
+
+def _get_messages(chat_id, limit=50, since=None):
+    with _msg_lock:
+        data  = _load_messages()
+        msgs  = data.get(chat_id, [])
+        if since:
+            msgs = [m for m in msgs if m['created_at'] > since]
+        return msgs[-limit:]
+
+def _mark_read(email, chat_id):
+    with _msg_lock:
+        reads = _load_reads()
+        if email not in reads:
+            reads[email] = {}
+        reads[email][chat_id] = datetime.datetime.utcnow().isoformat() + 'Z'
+        _save_reads(reads)
+
+def _get_unread_count(email):
+    with _msg_lock:
+        data       = _load_messages()
+        reads      = _load_reads()
+        user_reads = reads.get(email, {})
+        count      = 0
+        for chat_id in CHAT_IDS:
+            last_read = user_reads.get(chat_id, '')
+            for m in data.get(chat_id, []):
+                if m['sender_id'] == email:
+                    continue
+                if not last_read or m['created_at'] > last_read:
+                    count += 1
+        dm_key    = f'dm:{email}'
+        last_read = user_reads.get(dm_key, '')
+        for m in data.get(dm_key, []):
+            if m['sender_id'] == email:
+                continue
+            if not last_read or m['created_at'] > last_read:
+                count += 1
+        return count
+
+def _ios_auth(email, token):
+    """Return True if the token matches what is stored for this user."""
+    if not email or not token:
+        return False
+    users = _load_users()
+    user  = users.get(email.lower().strip(), {})
+    return user.get('ios_token') == token
+
+def _fire_onesignal(title, body):
+    """Send a OneSignal push to all subscribers. Runs in a background thread."""
+    import requests as _req
+    def _send():
+        try:
+            r = _req.post(
+                'https://onesignal.com/api/v1/notifications',
+                headers={
+                    'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
+                    'Content-Type':  'application/json',
+                },
+                json={
+                    'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
+                    'included_segments': ['All'],
+                    'headings':          {'en': title},
+                    'contents':          {'en': body},
+                    'ios_sound':         'default',
+                },
+                timeout=5,
+            )
+            print(f'[PUSH] sent "{title}" → {r.status_code} {r.text[:120]}')
+        except Exception as e:
+            print(f'[PUSH] error: {e}')
+    t = threading.Thread(target=_send, daemon=True)
+    t.start()
+
+def _send_onesignal_push_msg(heading, body_text, segment='All', filters=None):
+    """Wrapper kept for backwards compat — delegates to _fire_onesignal."""
+    _fire_onesignal(heading, body_text)
+
+# Ensure Jeff's member account exists on every startup
+_ensure_jeff_account()
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
+
+@app.context_processor
+def inject_globals():
+    status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    return dict(
+        is_live=(status == 'live'),
+        live_status=status,
+        live_status_message=message,
+        live_countdown_to=countdown_to,
+        live_timer_for=timer_for,
+        live_stream_url=stream_url,
+    )
+
 
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route('/api/live-status')
+def api_live_status():
+    status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    response = jsonify({
+        'status': status,
+        'countdown_to': countdown_to,
+        'message': message,
+        'timer_for': timer_for,
+        'stream_url': stream_url,
+    })
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
+
+@app.route('/live')
+def live():
+    return render_template('live.html', is_live=IS_LIVE, live_status=LIVE_STATUS,
+                           live_countdown_to=LIVE_COUNTDOWN_TO)
 
 
 @app.route('/')
@@ -327,6 +706,104 @@ def index():
         programs=top_programs,
         revelation_videos=REVELATION_VIDEOS[:4],
         stripe_public_key=STRIPE_PUBLIC_KEY)
+
+
+# ── Forgot / Reset Password ────────────────────────────────────────────────────
+
+_reset_tokens = {}   # token -> {'email': ..., 'expires': datetime}
+
+def _make_reset_token(email):
+    import secrets
+    token = secrets.token_urlsafe(32)
+    _reset_tokens[token] = {
+        'email':   email,
+        'expires': datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+    }
+    return token
+
+def _consume_reset_token(token):
+    """Return email if token is valid and not expired, else None. Removes token."""
+    entry = _reset_tokens.pop(token, None)
+    if not entry:
+        return None
+    if datetime.datetime.utcnow() > entry['expires']:
+        return None
+    return entry['email']
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'GET':
+        return render_template('forgot_password.html', sent=False, error=None)
+
+    email = request.form.get('email', '').strip().lower()
+    if not email:
+        return render_template('forgot_password.html', sent=False,
+                               error='Please enter your email address.')
+
+    token = _make_reset_token(email)
+
+    # Try to send email via SMTP if configured
+    smtp_host = os.environ.get('SMTP_HOST', '')
+    sent_email = False
+    if smtp_host:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            reset_url = f"{BASE_URL}/reset-password?token={token}"
+            msg = MIMEText(
+                f"Hi,\n\nClick the link below to reset your TRAIN4LIFE password "
+                f"(valid for 1 hour):\n\n{reset_url}\n\nIf you didn't request this, ignore this email.",
+                'plain'
+            )
+            msg['Subject'] = 'TRAIN4LIFE — Reset Your Password'
+            msg['From']    = os.environ.get('SMTP_FROM', 'noreply@train4life.life')
+            msg['To']      = email
+            with smtplib.SMTP(smtp_host, int(os.environ.get('SMTP_PORT', 587))) as s:
+                s.starttls()
+                s.login(os.environ.get('SMTP_USER', ''), os.environ.get('SMTP_PASS', ''))
+                s.sendmail(msg['From'], [email], msg.as_string())
+            sent_email = True
+        except Exception:
+            pass
+
+    # Show token on screen when SMTP is not configured (dev/test mode)
+    dev_token = None if sent_email else token
+    return render_template('forgot_password.html', sent=True,
+                           email=email, dev_token=dev_token)
+
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    token = request.args.get('token', '') or request.form.get('token', '')
+
+    if request.method == 'GET':
+        if not token or token not in _reset_tokens:
+            return render_template('reset_password.html', valid=False, token=token)
+        return render_template('reset_password.html', valid=True, token=token)
+
+    # POST — save new password
+    new_pw  = request.form.get('password', '').strip()
+    new_pw2 = request.form.get('password2', '').strip()
+
+    if not new_pw or len(new_pw) < 6:
+        return render_template('reset_password.html', valid=True, token=token,
+                               error='Password must be at least 6 characters.')
+    if new_pw != new_pw2:
+        return render_template('reset_password.html', valid=True, token=token,
+                               error='Passwords do not match.')
+
+    email = _consume_reset_token(token)
+    if not email:
+        return render_template('reset_password.html', valid=False, token=token)
+
+    users = _load_users()
+    if email not in users:
+        users[email] = {'email': email, 'plan': '', 'name': ''}
+    users[email]['password'] = _hash_pw(new_pw)
+    _save_users(users)
+
+    return render_template('reset_password.html', done=True)
 
 
 @app.route('/browse')
@@ -398,6 +875,30 @@ def api_search():
     return jsonify(results)
 
 
+def _get_vhx_token_for_session():
+    """Return a VHX auth token for the currently logged-in user, using cached href."""
+    email = session.get('user_email', '')
+    if not email:
+        return None
+    # Use cached href from session to avoid extra API call on every page
+    chref = session.get('vhx_customer_href')
+    if not chref:
+        users = _load_users()
+        user  = users.get(email, {})
+        chref = user.get('vhx_customer_href', '')
+        if not chref:
+            customer = _vhx_get_customer(email)
+            if customer:
+                chref = (customer.get('_links') or {}).get('self', {}).get('href', '')
+                if chref:
+                    users[email]['vhx_customer_href'] = chref
+                    users[email]['vhx_customer_id'] = str(customer.get('id', ''))
+                    _save_users(users)
+        if chref:
+            session['vhx_customer_href'] = chref
+    return _vhx_get_auth_token(chref) if chref else None
+
+
 @app.route('/watch/<video_id>')
 @login_required
 def watch(video_id):
@@ -422,7 +923,8 @@ def watch(video_id):
         else:
             related = [v for v in REVELATION_VIDEOS if v['id'] != video_id][:8]
         return render_template('watch.html', video=video, related=related,
-                               player='youtube', subscribed=subscribed)
+                               player='youtube', subscribed=subscribed,
+                               vhx_auth_token=None)
 
     # VHX video
     video = _vid_by_id.get(video_id)
@@ -434,13 +936,17 @@ def watch(video_id):
         return render_template('upgrade_wall.html', video=video,
                                stripe_public_key=STRIPE_PUBLIC_KEY)
 
+    # Get VHX auth token so the embed plays without VHX paywall
+    vhx_auth_token = _get_vhx_token_for_session() if subscribed else None
+
     cid = video.get('canonical_collection_id', '')
     related = [v for v in _vids_by_coll.get(cid, []) if v['id'] != video_id][:8]
     if not related:
         related = ALL_VHX_VIDEOS[:8]
 
     return render_template('watch.html', video=video, related=related,
-                           player='vhx', subscribed=subscribed)
+                           player='vhx', subscribed=subscribed,
+                           vhx_auth_token=vhx_auth_token)
 
 
 @app.route('/programs')
@@ -464,7 +970,6 @@ def subscribe():
 
 @app.route('/subscribe/success')
 def subscribe_success():
-    # If coming back from Stripe with session_id, verify and mark user
     session_id = request.args.get('session_id')
     if session_id and STRIPE_AVAILABLE and STRIPE_SECRET_KEY:
         try:
@@ -477,6 +982,12 @@ def subscribe_success():
                     users[email]['plan'] = plan_name
                     users[email]['stripe_customer_id'] = checkout_session.customer
                     users[email]['stripe_subscription_id'] = checkout_session.subscription
+                    # Create VHX customer if they don't have one yet, so video embeds work
+                    if not users[email].get('vhx_customer_id'):
+                        vhx_c = _vhx_get_customer(email) or _vhx_create_customer(email, users[email].get('name', ''))
+                        if vhx_c:
+                            users[email]['vhx_customer_id']   = str(vhx_c.get('id', ''))
+                            users[email]['vhx_customer_href'] = (vhx_c.get('_links') or {}).get('self', {}).get('href', '')
                     _save_users(users)
         except Exception:
             pass
@@ -545,25 +1056,49 @@ def stripe_webhook():
         except Exception:
             return jsonify({'error': 'Bad payload'}), 400
 
+    obj = event['data']['object']
+
     if event['type'] in ('checkout.session.completed', 'invoice.payment_succeeded'):
-        obj = event['data']['object']
         email = obj.get('customer_email') or (obj.get('metadata') or {}).get('user_email', '')
-        plan = (obj.get('metadata') or {}).get('plan', 'monthly')
+        plan  = (obj.get('metadata') or {}).get('plan', 'monthly')
+        stripe_customer_id = obj.get('customer', '')
         if email:
             users = _load_users()
             if email in users:
                 users[email]['plan'] = 'Annual' if plan == 'annual' else 'Monthly'
-                users[email]['stripe_customer_id'] = obj.get('customer', '')
+                if stripe_customer_id:
+                    users[email]['stripe_customer_id'] = stripe_customer_id
                 _save_users(users)
 
+    elif event['type'] in ('customer.subscription.created', 'customer.subscription.updated'):
+        customer_id = obj.get('customer', '')
+        status      = obj.get('status', '')  # active, trialing, past_due, canceled, etc.
+        if customer_id and status in ('active', 'trialing'):
+            users = _load_users()
+            for email, u in users.items():
+                if u.get('stripe_customer_id') == customer_id:
+                    u['plan'] = u.get('plan') or 'Monthly'
+                    break
+            _save_users(users)
+
     elif event['type'] in ('customer.subscription.deleted', 'customer.subscription.paused'):
-        obj = event['data']['object']
         customer_id = obj.get('customer', '')
         if customer_id:
             users = _load_users()
             for email, u in users.items():
                 if u.get('stripe_customer_id') == customer_id:
                     u['plan'] = None
+                    break
+            _save_users(users)
+
+    elif event['type'] == 'invoice.payment_failed':
+        customer_id = obj.get('customer', '')
+        if customer_id:
+            users = _load_users()
+            for email, u in users.items():
+                if u.get('stripe_customer_id') == customer_id:
+                    u['payment_failed'] = True
+                    u['payment_failed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                     break
             _save_users(users)
 
@@ -662,6 +1197,7 @@ def register():
                     'role': 'free',
                 }
                 _save_users(users)
+                session.permanent      = True
                 session['logged_in']   = True
                 session['user_email']  = email
                 session['user_name']   = name
@@ -675,26 +1211,129 @@ def login():
         return redirect(request.args.get('next') or url_for('browse'))
     error = None
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        pw    = request.form.get('password', '')
-        users = _load_users()
-        user  = users.get(email)
-        if user and user['password'] == _hash_pw(pw):
+        email   = request.form.get('email', '').strip().lower()
+        pw      = request.form.get('password', '')
+        next_url = request.args.get('next') or request.form.get('next') or url_for('browse')
+        users   = _load_users()
+        user    = users.get(email)
+        pw_hash = _hash_pw(pw)
+
+        # ── 1. Local auth ──────────────────────────────────────────────────────
+        if user and user.get('password') == pw_hash:
+            session.permanent     = True
             session['logged_in']  = True
             session['user_email'] = email
             session['user_name']  = user.get('name', email.split('@')[0])
-            next_url = request.args.get('next') or request.form.get('next') or url_for('browse')
             return redirect(next_url)
-        else:
-            error = 'Invalid email or password.'
+
+        # ── 2. VHX fallback — email-only lookup, no VHX password check ─────────
+        # VHX members have never set a password on this site.
+        # If their email exists in VHX, accept any password they type and
+        # save it as their new password for future logins.
+        vhx_customer = _vhx_get_customer(email)
+        if vhx_customer:
+            users = _vhx_provision_user(email, users, vhx_customer, password_hash=pw_hash)
+            _save_users(users)
+            session.permanent     = True
+            session['logged_in']  = True
+            session['user_email'] = email
+            session['user_name']  = users[email].get('name', email.split('@')[0])
+            return redirect(next_url)
+
+        error = 'No account found with that email. If you subscribed through VHX, enter your VHX email address.'
     return render_template('login.html', error=error,
                            next=request.args.get('next', ''))
+
+
+@app.route('/api/login', methods=['POST', 'OPTIONS'])
+def api_login():
+    # CORS preflight
+    if request.method == 'OPTIONS':
+        resp = Response()
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return resp
+
+    data     = request.get_json(silent=True) or {}
+    email    = data.get('email', '').strip().lower()
+    pw       = data.get('password', '')
+
+    def _json(payload, status=200):
+        r = jsonify(payload)
+        r.headers['Access-Control-Allow-Origin'] = '*'
+        return r, status
+
+    if not email or not pw:
+        return _json({'success': False, 'error': 'Email and password are required'}, 400)
+
+    users   = _load_users()
+    user    = users.get(email)
+    pw_hash = _hash_pw(pw)
+
+    def _mint_token(email, users):
+        """Generate and persist a long-lived iOS token, return it."""
+        token = str(uuid.uuid4())
+        users[email]['ios_token'] = token
+        _save_users(users)
+        return token
+
+    # ── 1. Local auth ──────────────────────────────────────────────────────
+    if user and user.get('password') == pw_hash:
+        token = user.get('ios_token') or _mint_token(email, users)
+        return _json({
+            'success': True,
+            'email':   email,
+            'plan':    user.get('plan') or 'free',
+            'name':    user.get('name', email.split('@')[0]),
+            'token':   token,
+        })
+
+    # ── 2. VHX fallback — email-only lookup, saves password for future ─────
+    vhx_customer = _vhx_get_customer(email)
+    if vhx_customer:
+        users = _vhx_provision_user(email, users, vhx_customer, password_hash=pw_hash)
+        _save_users(users)
+        user  = users.get(email, {})
+        token = user.get('ios_token') or _mint_token(email, users)
+        return _json({
+            'success': True,
+            'email':   email,
+            'plan':    user.get('plan') or 'free',
+            'name':    user.get('name', email.split('@')[0]),
+            'token':   token,
+        })
+
+    return _json({'success': False, 'error': 'Invalid email or password'}, 401)
 
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+
+# ── Forgot / Reset Password ────────────────────────────────────────────────────
+
+_reset_tokens = {}   # token -> {'email': ..., 'expires': datetime}
+
+def _make_reset_token(email):
+    import secrets
+    token = secrets.token_urlsafe(32)
+    _reset_tokens[token] = {
+        'email':   email,
+        'expires': datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+    }
+    return token
+
+def _consume_reset_token(token):
+    """Return email if token is valid and not expired, else None. Removes token."""
+    entry = _reset_tokens.pop(token, None)
+    if not entry:
+        return None
+    if datetime.datetime.utcnow() > entry['expires']:
+        return None
+    return entry['email']
 
 
 @app.route('/account')
@@ -748,6 +1387,88 @@ def api_content():
     })
 
 
+# ── LIVE SETTINGS (file-based, updated by /admin/live) ────────────────────────
+_live_settings_path = os.path.join(_base, 'data', 'live-settings.json')
+
+def _load_live_settings():
+    """Read live settings from file, falling back to env vars."""
+    if os.path.exists(_live_settings_path):
+        try:
+            with open(_live_settings_path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_live_settings(data):
+    os.makedirs(os.path.dirname(_live_settings_path), exist_ok=True)
+    with open(_live_settings_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+# ── OneSignal push notifications ───────────────────────────────────────────────
+
+def _send_onesignal_push(status):
+    """Fire-and-forget push to all OneSignal subscribers.
+    Only sends for 'live' and 'countdown' — silently skips 'off' or missing keys."""
+    app_id  = os.environ.get('ONESIGNAL_APP_ID', '').strip()
+    api_key = os.environ.get('ONESIGNAL_API_KEY', '').strip()
+    if not app_id or not api_key:
+        return   # OneSignal not configured yet
+
+    if status == 'live':
+        title = '🔴 TRAIN4LIFE IS LIVE NOW!'
+        body  = 'Jeff is live! Tap to watch.'
+    elif status == 'countdown':
+        title = '⏰ TRAIN4LIFE Going Live Soon!'
+        body  = 'Live session starting — get ready to train!'
+    else:
+        return   # nothing to send for 'off'
+
+    payload = {
+        'app_id':              app_id,
+        'included_segments':   ['All'],
+        'headings':            {'en': title},
+        'contents':            {'en': body},
+        'ios_sound':           'default',
+        'ios_badgeType':       'Increase',
+        'ios_badgeCount':      1,
+        'url':                 'train4life://',   # deep-link opens the app
+    }
+    try:
+        _http.post(
+            'https://onesignal.com/api/v1/notifications',
+            json=payload,
+            headers={
+                'Authorization': f'Basic {api_key}',
+                'Content-Type':  'application/json',
+            },
+            timeout=8,
+        )
+    except Exception:
+        pass   # never block the admin action if push fails
+
+def _get_live_vars():
+    """Return current live status vars — file overrides env vars."""
+    settings = _load_live_settings()
+    status = settings.get('status') or os.environ.get('LIVE_STATUS', 'off')
+    if status not in ('off', 'countdown', 'live'):
+        status = 'off'
+    countdown_to = settings.get('countdown_to') or os.environ.get('LIVE_COUNTDOWN_TO', '')
+    _defaults = {
+        'off':       '🔴 LIVE — RED BORDER = READY  |  RED GLOW = COMING SOON  |  SOLID RED = ON AIR NOW',
+        'countdown': '🔴 GOING LIVE SOON — Click to get notified!',
+        'live':      '🔴 WE ARE LIVE RIGHT NOW!',
+    }
+    message = (settings.get('message')
+                or os.environ.get('LIVE_STATUS_MESSAGE', '')
+                or _defaults[status])
+    timer_for = settings.get('timer_for', 'both')
+    if timer_for not in ('both', 'express', 'bible'):
+        timer_for = 'both'
+    stream_url = settings.get('stream_url', '')
+    return status, countdown_to, message, timer_for, stream_url
+
 # ── APP CONTENT CURATOR ────────────────────────────────────────────────────────
 
 _app_content_path = os.path.join(_base, 'data', 'app-content.json')
@@ -776,8 +1497,8 @@ def _all_curator_videos():
     Tries VHX API first; falls back to content.json."""
     videos = []
 
-    # Try VHX API (fetches first 100 newest; admin can paginate if needed)
-    vhx_live = _fetch_vhx_videos(per_page=100)
+    # Fetch all videos from VHX API across all pages
+    vhx_live = _fetch_all_vhx_videos()
     if vhx_live:
         seen = set()
         for v in vhx_live:
@@ -818,16 +1539,663 @@ def _admin_required(f):
     return decorated
 
 
+# ── Messages Routes ────────────────────────────────────────────────────────────
+
+def _msg_auth():
+    """Return (email, is_admin) or (None, False) if not authenticated."""
+    # Admin session — is_admin may be set without logged_in
+    if session.get('is_admin'):
+        email = session.get('user_email', 'admin')
+        return email, True
+    # Member web session
+    if session.get('logged_in'):
+        email = session.get('user_email', '')
+        return email, False
+    # iOS Bearer token
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer '):
+        parts = auth[7:].split(':', 1)
+        if len(parts) == 2:
+            email, token = parts[0], parts[1]
+            if _ios_auth(email, token):
+                return email, False
+    return None, False
+
+
+@app.route('/messages')
+@login_required
+def messages_page():
+    email  = session.get('user_email', '')
+    unread = _get_unread_count(email) if email else 0
+    return render_template('messages_list.html', unread=unread)
+
+
+@app.route('/messages/<chat_id>', methods=['GET', 'POST'])
+@login_required
+def messages_chat(chat_id):
+    email    = session.get('user_email', '')
+    users    = _load_users()
+    user     = users.get(email, {})
+    name     = user.get('name') or email.split('@')[0].capitalize()
+
+    valid = ['announcements', 'express', 'bible', 'dm']
+    if chat_id not in valid:
+        return redirect(url_for('messages_page'))
+
+    actual_id  = f'dm:{email}' if chat_id == 'dm' else chat_id
+    is_readonly = (chat_id == 'announcements')
+
+    error = None
+    if request.method == 'POST':
+        content = request.form.get('content', '').strip()
+        if not content:
+            error = 'Message cannot be empty.'
+        elif len(content) > 2000:
+            error = 'Message too long (max 2000 characters).'
+        elif is_readonly:
+            error = 'Only Jeff can post to Announcements.'
+        else:
+            _post_message(actual_id, email, name, content, False)
+            return redirect(url_for('messages_chat', chat_id=chat_id))
+
+    msgs = _get_messages(actual_id)
+    _mark_read(email, actual_id)
+
+    titles = {
+        'announcements': ('📢 Announcements',    'Posts from Jeff — read only'),
+        'express':       ('⚡ Express Community', 'Chat with fellow Express members'),
+        'bible':         ('📖 Bible Bootcamp',    'Bible Bootcamp community chat'),
+        'dm':            ('💬 Jeff (Direct)',      'Private message with Jeff'),
+    }
+    title, subtitle = titles[chat_id]
+    return render_template('messages_chat.html',
+        chat_id=chat_id, title=title, subtitle=subtitle,
+        messages=msgs, is_readonly=is_readonly,
+        my_email=email, error=error,
+        is_dm=(chat_id == 'dm'),
+    )
+
+
+@app.route('/api/messages')
+def api_get_messages():
+    email, is_admin = _msg_auth()
+
+    chat      = request.args.get('chat', 'announcements')
+    member_id = request.args.get('member_id', email or '')
+    since     = request.args.get('since', '')
+
+    if chat == 'dm':
+        # DMs require auth
+        if not email:
+            return jsonify({'error': 'unauthorized'}), 401
+        chat_id = f'dm:{member_id}'
+        if not is_admin and member_id != email:
+            return jsonify({'error': 'forbidden'}), 403
+    elif chat in CHAT_IDS:
+        # Group chats are readable without auth (public community channels)
+        chat_id = chat
+    else:
+        return jsonify({'error': 'invalid chat'}), 400
+
+    msgs = _get_messages(chat_id, since=since or None)
+    if email:
+        _mark_read(email, chat_id)
+    return jsonify({'messages': msgs, 'chat_id': chat_id})
+
+
+@app.route('/api/video/start', methods=['POST'])
+def api_video_start():
+    """Return (or create) a Daily.co room for a DM, so both parties join the same room."""
+    app_key = request.headers.get('X-App-Key', '')
+    email, is_admin = _msg_auth()
+    if not email and app_key != 'Smallville2006':
+        return jsonify({'error': 'unauthorized'}), 401
+
+    daily_key = os.environ.get('DAILY_API_KEY', '').strip()
+    if not daily_key:
+        return jsonify({'error': 'Video calls not configured'}), 503
+
+    body         = request.get_json(silent=True) or {}
+    raw_chat     = body.get('chat_id') or body.get('chat', '')
+    member_email = body.get('member_email', '') or ''
+
+    # Resolve canonical DM key
+    # Admin sends:  {chat_id: "dm:wmratliff@gmail.com"}
+    # iOS app sends: {chat: "dm", member_email: "wmratliff@gmail.com"}
+    if raw_chat.startswith('dm:'):
+        chat_id = raw_chat
+    elif raw_chat == 'dm':
+        resolved_email = email or member_email
+        chat_id = f'dm:{resolved_email}' if resolved_email else 'dm'
+    else:
+        chat_id = raw_chat
+
+    print(f'=== VIDEO START: raw_chat={raw_chat!r} email={email!r} member_email={member_email!r} chat_id={chat_id!r} ===')
+    print(f'=== ACTIVE ROOMS: {list(_active_rooms.keys())} ===')
+
+    # ── Return existing active room if one exists ─────────────────────────────
+    with _rooms_lock:
+        existing = _active_rooms.get(chat_id)
+    print(f'=== FOUND ROOM: {existing} ===')
+    if existing and existing['expires_at'] > time.time():
+        print(f'=== VIDEO JOIN EXISTING ROOM: chat={chat_id} url={existing["url"]} ===')
+        return jsonify({'url': existing['url'], 'room': existing['room']})
+
+    # ── Create new Daily.co room ──────────────────────────────────────────────
+    room_name = 'train4life-' + uuid.uuid4().hex[:10]
+    exp       = int(time.time()) + 3600
+
+    try:
+        import requests as _r
+        resp = _r.post(
+            'https://api.daily.co/v1/rooms',
+            headers={'Authorization': f'Bearer {daily_key}', 'Content-Type': 'application/json'},
+            json={
+                'name':       room_name,
+                'privacy':    'public',
+                'properties': {'exp': exp, 'max_participants': 10},
+            },
+            timeout=8,
+        )
+        room = resp.json()
+        if 'url' not in room:
+            return jsonify({'error': room.get('error', 'Failed to create room')}), 500
+        room_url = room['url']
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    # ── Save as active room for this DM ──────────────────────────────────────
+    with _rooms_lock:
+        _active_rooms[chat_id] = {
+            'url':        room_url,
+            'room':       room_name,
+            'expires_at': time.time() + 3600,
+        }
+
+    # ── Push notification (only sent when room is first created) ─────────────
+    if is_admin:
+        push_title = '📹 Jeff is calling!'
+        push_body  = 'Tap to join the video call'
+    else:
+        users       = _load_users()
+        caller_name = users.get(email or '', {}).get('name') or (email or 'Someone').split('@')[0].capitalize()
+        push_title  = f'📹 {caller_name} wants a video call!'
+        push_body   = 'Tap to join'
+
+    print(f'=== VIDEO PUSH FIRING: title="{push_title}" url={room_url} ===')
+    try:
+        import requests as _r2
+        resp = _r2.post(
+            'https://onesignal.com/api/v1/notifications',
+            headers={
+                'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
+                'Content-Type':  'application/json',
+            },
+            json={
+                'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
+                'included_segments': ['All'],
+                'headings':          {'en': push_title},
+                'contents':          {'en': push_body},
+                'url':               room_url,
+                'ios_sound':         'default',
+            },
+            timeout=5,
+        )
+        print(f'=== ONESIGNAL VIDEO: {resp.status_code} {resp.text[:200]} ===')
+    except Exception as e:
+        print(f'=== ONESIGNAL VIDEO ERROR: {e} ===')
+
+    return jsonify({'url': room_url, 'room': room_name})
+
+
+@app.route('/api/video/clear', methods=['GET', 'POST'])
+def api_video_clear():
+    """Clear all active video rooms so fresh ones get created on next tap."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'unauthorized'}), 401
+    with _rooms_lock:
+        count = len(_active_rooms)
+        _active_rooms.clear()
+    print(f'=== VIDEO ROOMS CLEARED: {count} room(s) removed ===')
+    return jsonify({'status': 'cleared', 'count': count})
+
+
+# ── EasyList PC-bridge endpoints ─────────────────────────────────────────────
+
+def _load_easylist():
+    if not os.path.exists(_easylist_path):
+        return []
+    try:
+        with open(_easylist_path) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def _save_easylist(listings):
+    os.makedirs(os.path.dirname(_easylist_path), exist_ok=True)
+    with open(_easylist_path, 'w') as f:
+        json.dump(listings, f)
+
+@app.route('/api/easylist/pending', methods=['GET', 'POST'])
+def api_easylist_pending():
+    """GET: PC retrieves pending listings. POST: iOS uploads pending listings."""
+    if request.headers.get('X-App-Key', '') != 'Smallville2006':
+        return jsonify({'error': 'unauthorized'}), 401
+
+    if request.method == 'POST':
+        data     = request.get_json(silent=True) or {}
+        incoming = data.get('listings', [])
+        if not incoming:
+            return jsonify({'error': 'no listings provided'}), 400
+        with _easylist_lock:
+            existing  = _load_easylist()
+            exist_ids = {l['id'] for l in existing}
+            added = 0
+            for l in incoming:
+                if l.get('id') and l['id'] not in exist_ids:
+                    l['server_status'] = 'pending'
+                    existing.append(l)
+                    added += 1
+            _save_easylist(existing)
+        print(f'=== EASYLIST: received {len(incoming)}, added {added} new ===')
+        return jsonify({'ok': True, 'received': len(incoming), 'added': added})
+
+    else:  # GET — PC script fetches pending
+        with _easylist_lock:
+            all_listings = _load_easylist()
+        pending = [l for l in all_listings if l.get('server_status') == 'pending']
+        return jsonify({'listings': pending})
+
+
+@app.route('/api/easylist/mark-posted', methods=['POST'])
+def api_easylist_mark_posted():
+    """PC calls this after successfully posting a listing to Facebook."""
+    if request.headers.get('X-App-Key', '') != 'Smallville2006':
+        return jsonify({'error': 'unauthorized'}), 401
+    data       = request.get_json(silent=True) or {}
+    listing_id = data.get('id', '')
+    if not listing_id:
+        return jsonify({'error': 'id required'}), 400
+    with _easylist_lock:
+        listings = _load_easylist()
+        found = False
+        for l in listings:
+            if l.get('id') == listing_id:
+                l['server_status'] = 'posted'
+                found = True
+                break
+        if found:
+            _save_easylist(listings)
+    return jsonify({'ok': found, 'id': listing_id})
+
+
+@app.route('/api/messages', methods=['POST'])
+def api_post_message():
+    email, is_admin = _msg_auth()
+    if not email:
+        return jsonify({'error': 'unauthorized'}), 401
+
+    data      = request.get_json(silent=True) or {}
+    chat      = data.get('chat', '')
+    content   = (data.get('content') or '').strip()
+    member_id = data.get('member_id', email)
+
+    if not content:
+        return jsonify({'error': 'empty message'}), 400
+    if len(content) > 2000:
+        return jsonify({'error': 'message too long'}), 400
+
+    users       = _load_users()
+    user        = users.get(email, {})
+    sender_name = user.get('name') or email.split('@')[0].capitalize()
+
+    if chat == 'dm':
+        chat_id = f'dm:{member_id}'
+    elif chat in CHAT_IDS:
+        if chat == 'announcements' and not is_admin:
+            return jsonify({'error': 'only admin can post to announcements'}), 403
+        chat_id = chat
+    else:
+        return jsonify({'error': 'invalid chat'}), 400
+
+    msg = _post_message(chat_id, email, sender_name, content, is_admin)
+
+    # Push notification — inline, no functions, fires when Jeff/admin sends
+    print(f"=== API POST MESSAGE HIT === is_admin={is_admin} chat={chat_id}")
+    if is_admin:
+        try:
+            import requests as _r
+            resp = _r.post(
+                'https://onesignal.com/api/v1/notifications',
+                headers={
+                    'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
+                    'Content-Type':  'application/json',
+                },
+                json={
+                    'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
+                    'included_segments': ['All'],
+                    'headings':          {'en': '💬 New message from Jeff'},
+                    'contents':          {'en': content[:100]},
+                    'ios_sound':         'default',
+                },
+                timeout=5,
+            )
+            print(f'=== ONESIGNAL API: {resp.status_code} {resp.text[:200]} ===')
+        except Exception as e:
+            print(f'=== ONESIGNAL API ERROR: {e} ===')
+
+    return jsonify({'message': msg})
+
+
+@app.route('/api/messages/unread')
+def api_messages_unread():
+    email, _ = _msg_auth()
+    if not email:
+        return jsonify({'count': 0})
+    count = _get_unread_count(email)
+    return jsonify({'count': count})
+
+
+@app.route('/api/messages/mark-read', methods=['POST'])
+def api_messages_mark_read():
+    email, _ = _msg_auth()
+    if not email:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    chat = data.get('chat', '')
+    member_id = data.get('member_id', email)
+    chat_id = f'dm:{member_id}' if chat == 'dm' else chat
+    _mark_read(email, chat_id)
+    return jsonify({'ok': True})
+
+
+@app.route('/admin/messages')
+def admin_messages_page():
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login'))
+    with _msg_lock:
+        data  = _load_messages()
+        reads = _load_reads()
+    users       = _load_users()
+    admin_reads = reads.get('__admin__', {})
+    dm_convos   = []
+    for key, msgs in data.items():
+        if not key.startswith('dm:') or not msgs:
+            continue
+        member_email = key[3:]
+        last_msg     = msgs[-1]
+        last_read    = admin_reads.get(key, '')
+        unread       = sum(1 for m in msgs
+                           if not m['is_admin'] and (not last_read or m['created_at'] > last_read))
+        dm_convos.append({
+            'email':        member_email,
+            'name':         users.get(member_email, {}).get('name') or member_email.split('@')[0],
+            'last_message': last_msg['content'][:60],
+            'last_time':    last_msg['created_at'],
+            'unread':       unread,
+        })
+    dm_convos.sort(key=lambda x: x['last_time'], reverse=True)
+    return render_template('admin_messages_list.html', dm_convos=dm_convos)
+
+
+@app.route('/admin/messages/dm/<path:member_email>', methods=['GET', 'POST'])
+def admin_messages_dm(member_email):
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login'))
+    dm_key = f'dm:{member_email}'
+    if request.method == 'POST':
+        print(f"=== DM SEND ROUTE HIT === member={member_email}")
+        content = request.form.get('content', '').strip()
+        if content and len(content) <= 2000:
+            _post_message(dm_key, JEFF_EMAIL, 'Jeff', content, True)
+            try:
+                import requests as _r
+                resp = _r.post(
+                    'https://onesignal.com/api/v1/notifications',
+                    headers={'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq', 'Content-Type': 'application/json'},
+                    json={
+                        'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
+                        'included_segments': ['All'],
+                        'headings':          {'en': '💬 New message from Jeff'},
+                        'contents':          {'en': content[:100]},
+                        'ios_sound':         'default',
+                    },
+                    timeout=5,
+                )
+                print(f'=== ONESIGNAL DM: {resp.status_code} {resp.text[:200]} ===')
+            except Exception as e:
+                print(f'=== ONESIGNAL DM ERROR: {e} ===')
+        return redirect(url_for('admin_messages_dm', member_email=member_email))
+    msgs = _get_messages(dm_key)
+    _mark_read('__admin__', dm_key)
+    users = _load_users()
+    member_name = users.get(member_email, {}).get('name') or member_email.split('@')[0]
+    return render_template('admin_chat.html',
+        title=f'💬 {member_name}', subtitle=member_email,
+        messages=msgs, back_url=url_for('admin_messages_page'),
+        post_url=url_for('admin_messages_dm', member_email=member_email),
+        chat_id=dm_key,
+    )
+
+
+@app.route('/admin/messages/<chat_id>', methods=['GET', 'POST'])
+def admin_messages_chat(chat_id):
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login'))
+    valid = ['announcements', 'express', 'bible']
+    if chat_id not in valid:
+        return redirect(url_for('admin_messages_page'))
+    if request.method == 'POST':
+        print(f"=== ADMIN CHAT SEND HIT === chat_id={chat_id}")
+        content = request.form.get('content', '').strip()
+        if content and len(content) <= 2000:
+            _post_message(chat_id, JEFF_EMAIL, 'Jeff', content, True)
+            try:
+                import requests as _r
+                resp = _r.post(
+                    'https://onesignal.com/api/v1/notifications',
+                    headers={'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq', 'Content-Type': 'application/json'},
+                    json={
+                        'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
+                        'included_segments': ['All'],
+                        'headings':          {'en': '💬 New message from Jeff'},
+                        'contents':          {'en': content[:100]},
+                        'ios_sound':         'default',
+                    },
+                    timeout=5,
+                )
+                print(f'=== ONESIGNAL CHAT: {resp.status_code} {resp.text[:200]} ===')
+            except Exception as e:
+                print(f'=== ONESIGNAL CHAT ERROR: {e} ===')
+        return redirect(url_for('admin_messages_chat', chat_id=chat_id))
+    msgs = _get_messages(chat_id)
+    _mark_read('__admin__', chat_id)
+    titles = {
+        'announcements': ('📢 Announcements',    'Post to all members'),
+        'express':       ('⚡ Express Community', 'Express group chat'),
+        'bible':         ('📖 Bible Bootcamp',    'Bible Bootcamp group chat'),
+    }
+    title, subtitle = titles[chat_id]
+    return render_template('admin_chat.html',
+        title=title, subtitle=subtitle,
+        messages=msgs, back_url=url_for('admin_messages_page'),
+        post_url=url_for('admin_messages_chat', chat_id=chat_id),
+        chat_id=chat_id,
+    )
+
+
+@app.route('/admin/api/send', methods=['POST'])
+def admin_api_send():
+    """Dedicated admin send endpoint — bypasses _msg_auth, checks is_admin directly."""
+    print("=== MESSAGE SEND ROUTE HIT ===")
+    print(f"=== ONESIGNAL KEY: {os.environ.get('ONESIGNAL_API_KEY', 'NOT SET')[:20]} ===")
+    if not session.get('is_admin'):
+        return jsonify({'error': 'unauthorized'}), 401
+    data    = request.get_json(silent=True) or {}
+    chat    = data.get('chat', '').strip()
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'error': 'empty message'}), 400
+    if len(content) > 2000:
+        return jsonify({'error': 'message too long'}), 400
+    # Resolve chat_id
+    if chat in CHAT_IDS:
+        chat_id = chat
+    elif chat.startswith('dm:'):
+        chat_id = chat
+    else:
+        return jsonify({'error': f'invalid chat: {chat!r}'}), 400
+    jeff_email = session.get('user_email', JEFF_EMAIL)
+    msg = _post_message(chat_id, jeff_email, 'Jeff', content, True)
+
+    # Push notification — inline, full response logged
+    import requests
+    try:
+        response = requests.post(
+            'https://onesignal.com/api/v1/notifications',
+            headers={
+                'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
+                'Content-Type':  'application/json',
+            },
+            json={
+                'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
+                'included_segments': ['All'],
+                'headings':          {'en': '💬 New message from Jeff'},
+                'contents':          {'en': content[:100]},
+                'ios_sound':         'default',
+            },
+            timeout=5,
+        )
+        print(f'OneSignal response: {response.status_code} {response.text}')
+    except Exception as e:
+        print(f'OneSignal error: {e}')
+
+    return jsonify({'message': msg})
+
+
+@app.route('/api/admin/conversations')
+def api_admin_conversations():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'forbidden'}), 403
+    with _msg_lock:
+        data  = _load_messages()
+        reads = _load_reads()
+    users = _load_users()
+    admin_reads = reads.get('__admin__', {})
+    convos = []
+    for key, msgs in data.items():
+        if not key.startswith('dm:') or not msgs:
+            continue
+        member_email = key[3:]
+        last_msg     = msgs[-1]
+        last_read    = admin_reads.get(key, '')
+        unread       = sum(1 for m in msgs if not m['is_admin'] and (not last_read or m['created_at'] > last_read))
+        convos.append({'email': member_email, 'name': users.get(member_email, {}).get('name') or member_email, 'last_message': last_msg['content'][:60], 'last_time': last_msg['created_at'], 'unread': unread})
+    convos.sort(key=lambda x: x['last_time'], reverse=True)
+    return jsonify({'conversations': convos})
+
+
+@app.route('/admin')
+def admin_index():
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login'))
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/dashboard')
+@_admin_required
+def admin_dashboard():
+    status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    users = _load_users()
+    subscriber_count = sum(1 for u in users.values() if u.get('plan') and u.get('plan') != 'free')
+    app_content = _load_app_content()
+    app_video_count = len(app_content.get('express', [])) + len(app_content.get('bible_bootcamp', []))
+    return render_template('admin_dashboard.html',
+                           live_status=status,
+                           live_countdown_to=countdown_to,
+                           live_message=message,
+                           subscriber_count=subscriber_count,
+                           app_video_count=app_video_count,
+                           total_video_count=len(ALL_VHX_VIDEOS),
+                           revenue=None)
+
+
+@app.route('/admin/live', methods=['GET', 'POST'])
+@_admin_required
+def admin_live():
+    status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    saved = False
+    if request.method == 'POST':
+        new_status = request.form.get('status', 'off')
+        if new_status not in ('off', 'countdown', 'live'):
+            new_status = 'off'
+        new_countdown  = request.form.get('countdown_to', '').strip()
+        new_message    = request.form.get('message', '').strip()
+        new_timer_for  = request.form.get('timer_for', 'both')
+        if new_timer_for not in ('both', 'express', 'bible'):
+            new_timer_for = 'both'
+        new_stream_url = request.form.get('stream_url', '').strip()
+        _save_live_settings({
+            'status':       new_status,
+            'countdown_to': new_countdown,
+            'message':      new_message,
+            'timer_for':    new_timer_for,
+            'stream_url':   new_stream_url,
+        })
+        _send_onesignal_push(new_status)
+        status, countdown_to, message, timer_for, stream_url = new_status, new_countdown, new_message, new_timer_for, new_stream_url
+        saved = True
+    return render_template('admin_live.html',
+                           live_status=status,
+                           live_countdown_to=countdown_to,
+                           live_message=message,
+                           live_timer_for=timer_for,
+                           live_stream_url=stream_url,
+                           saved=saved)
+
+
+@app.route('/api/admin/set-live', methods=['POST'])
+def api_admin_set_live():
+    """iOS admin endpoint — POST JSON with Authorization: Bearer <password>."""
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer ') or auth[7:] != ADMIN_PASSWORD:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    new_status = data.get('status', 'off')
+    if new_status not in ('off', 'countdown', 'live'):
+        return jsonify({'error': 'Invalid status'}), 400
+    _save_live_settings({
+        'status':       new_status,
+        'countdown_to': data.get('countdown_to', ''),
+        'message':      data.get('message', ''),
+        'timer_for':    data.get('timer_for', 'both'),
+        'stream_url':   data.get('stream_url', ''),
+    })
+    _send_onesignal_push(new_status)
+    status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    resp = jsonify({'ok': True, 'status': status, 'countdown_to': countdown_to, 'message': message})
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     error = None
     if request.method == 'POST':
         if request.form.get('password') == ADMIN_PASSWORD:
-            session['is_admin'] = True
+            session.permanent     = True
+            session['is_admin']   = True
+            session['user_email'] = JEFF_EMAIL   # so _msg_auth() returns Jeff's real email
             next_url = request.args.get('next', url_for('admin_app_content'))
             return redirect(next_url)
         error = 'Wrong password.'
     return render_template('admin_login.html', error=error)
+
+
+@app.route('/admin/guide')
+@_admin_required
+def admin_guide():
+    return render_template('admin_guide.html')
 
 
 @app.route('/admin/logout')
@@ -919,6 +2287,321 @@ def api_app_content_add():
         _save_app_content(app_content)
 
     return jsonify({'success': True, 'section': section, 'video_id': video_id})
+
+
+# ── PDF LIBRARY ─────────────────────────────────────────────────────────────────
+
+_pdfs_path   = os.path.join(_base, 'static', 'pdfs.json')
+_pdfs_dir    = os.path.join(_base, 'static', 'pdfs')
+_thumbs_dir  = os.path.join(_base, 'static', 'pdf-thumbs')
+_videos_path = os.path.join(_base, 'static', 'videos.json')
+
+
+def _load_pdfs():
+    if not os.path.exists(_pdfs_path):
+        return []
+    with open(_pdfs_path) as f:
+        return json.load(f)
+
+
+def _save_pdfs(data):
+    with open(_pdfs_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def _load_videos():
+    if not os.path.exists(_videos_path):
+        return []
+    with open(_videos_path) as f:
+        return json.load(f)
+
+
+def _save_videos(data):
+    with open(_videos_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def _safe_filename(name):
+    name = re.sub(r'[^\w\s\-.]', '', name).strip()
+    return re.sub(r'\s+', '_', name)
+
+
+VHX_API_KEY    = 'W8R9VxBi3sWsDk8G5ymMTpRqgXwWyU4i'
+_extras_path   = os.path.join(_base, 'static', 'extras.json')
+
+
+def _load_extras():
+    if not os.path.exists(_extras_path):
+        return []
+    with open(_extras_path) as f:
+        return json.load(f)
+
+
+def _fmt_size(n):
+    if not n:
+        return ''
+    if n < 1024:
+        return f'{n} B'
+    if n < 1024 * 1024:
+        return f'{n // 1024} KB'
+    return f'{n / (1024*1024):.1f} MB'
+
+
+def _categorize_extras(extras):
+    express, bible, other = [], [], []
+    for e in extras:
+        t = e.get('title', '').upper()
+        item = {
+            'id':            e['id'],
+            'title':         re.sub(r'\.(pdf|png|jpg|jpeg)$', '', e.get('title', ''), flags=re.I).strip(),
+            'file_type':     e.get('file_type', ''),
+            'file_size':     e.get('file_size', 0),
+            'file_size_label': _fmt_size(e.get('file_size', 0)),
+            'thumbnail':     (e.get('thumbnail') or {}).get('medium'),
+        }
+        if 'REVELATION' in t:
+            bible.append(item)
+        elif any(k in t for k in ('EXPRESS', 'CALENDAR', 'CHEAT')):
+            express.append(item)
+        else:
+            other.append(item)
+    return express, bible, other
+
+
+@app.route('/resources')
+def resources():
+    extras = _load_extras()
+    express_extras, bible_extras, other_extras = _categorize_extras(extras)
+    pdf_entries = _load_pdfs()
+    total = len(express_extras) + len(bible_extras) + len(other_extras) + len(pdf_entries)
+    return render_template('resources.html',
+                           express_extras=express_extras,
+                           bible_extras=bible_extras,
+                           other_extras=other_extras,
+                           pdf_entries=pdf_entries,
+                           total_count=total)
+
+
+@app.route('/resources/download/<int:extra_id>')
+def resources_download(extra_id):
+    """Fetch a fresh signed URL from VHX and redirect to it."""
+    if not _HTTP_OK:
+        return 'Download unavailable', 503
+    try:
+        resp = _http.get(
+            f'https://api.vhx.tv/extras/{extra_id}',
+            auth=(VHX_API_KEY, ''),
+            timeout=10,
+        )
+        url = resp.json().get('url')
+        if url:
+            return redirect(url)
+    except Exception:
+        pass
+    return 'Download link unavailable', 503
+
+
+@app.route('/api/pdfs', methods=['GET'])
+def api_pdfs():
+    pdfs = _load_pdfs()
+    resp = jsonify(pdfs)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Cache-Control'] = 'public, max-age=60'
+    return resp
+
+
+@app.route('/api/extras', methods=['GET'])
+def api_extras():
+    extras = _load_extras()
+    express, bible, other = _categorize_extras(extras)
+    resp = jsonify({
+        'total': len(extras),
+        'express': express,
+        'bible': bible,
+        'other': other,
+    })
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    return resp
+
+
+@app.route('/api/add-pdf', methods=['POST', 'OPTIONS'])
+def api_add_pdf():
+    if request.method == 'OPTIONS':
+        r = Response()
+        r.headers['Access-Control-Allow-Origin'] = '*'
+        r.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        r.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Admin-Password'
+        return r
+    _pub_pass = 'Smallville2006'
+    if (request.headers.get('X-Admin-Key') != ADMIN_API_KEY
+            and request.headers.get('X-Admin-Password') != ADMIN_PASSWORD
+            and request.headers.get('X-Admin-Password') != _pub_pass):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    title       = request.form.get('title', '').strip()
+    description = request.form.get('description', '').strip()
+    category    = request.form.get('category', 'other').strip()
+    pdf_file    = request.files.get('pdf_file')
+    thumb_file  = request.files.get('thumbnail_file')
+
+    if not title or not pdf_file:
+        return jsonify({'error': 'title and pdf_file are required'}), 400
+
+    os.makedirs(_pdfs_dir, exist_ok=True)
+    os.makedirs(_thumbs_dir, exist_ok=True)
+
+    import uuid as _uuid
+    uid = _uuid.uuid4().hex[:8]
+    pdf_name  = uid + '_' + _safe_filename(pdf_file.filename or 'file.pdf')
+    pdf_path  = os.path.join(_pdfs_dir, pdf_name)
+    pdf_file.save(pdf_path)
+    _base_url = 'https://www.train4life.life'
+    pdf_url = _base_url + '/static/pdfs/' + pdf_name
+
+    thumb_url = None
+    if thumb_file and thumb_file.filename:
+        thumb_name = uid + '_' + _safe_filename(thumb_file.filename)
+        thumb_file.save(os.path.join(_thumbs_dir, thumb_name))
+        thumb_url = _base_url + '/static/pdf-thumbs/' + thumb_name
+
+    from datetime import date as _date
+    pdfs = _load_pdfs()
+    pdfs.append({
+        'id':          'pdf_' + uid,
+        'title':       title,
+        'description': description,
+        'category':    category,
+        'url':         pdf_url,
+        'thumbnail':   thumb_url,
+        'created_at':  str(_date.today()),
+    })
+    _save_pdfs(pdfs)
+
+    r = jsonify({'success': True, 'id': 'pdf_' + uid, 'url': pdf_url})
+    r.headers['Access-Control-Allow-Origin'] = '*'
+    return r
+
+
+# ── Video library ────────────────────────────────────────────────────────────
+
+@app.route('/api/videos', methods=['GET'])
+def api_videos():
+    videos = _load_videos()
+    r = jsonify(videos)
+    r.headers['Access-Control-Allow-Origin'] = '*'
+    r.headers['Cache-Control'] = 'public, max-age=60'
+    return r
+
+
+@app.route('/api/add-video', methods=['POST', 'OPTIONS'])
+def api_add_video():
+    if request.method == 'OPTIONS':
+        resp = Response()
+        resp.headers['Access-Control-Allow-Origin']  = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Admin-Password'
+        return resp
+
+    _pub_pass = 'Smallville2006'
+    if (request.headers.get('X-Admin-Key')      != ADMIN_API_KEY
+            and request.headers.get('X-Admin-Password') != ADMIN_PASSWORD
+            and request.headers.get('X-Admin-Password') != _pub_pass):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data          = request.get_json(silent=True) or {}
+    title         = data.get('title', '').strip()
+    description   = data.get('description', '').strip()
+    category      = data.get('category', 'other').strip()
+    thumbnail_url = (data.get('thumbnail_url') or '').strip() or None
+    vhx_url       = (data.get('vhx_url') or '').strip() or None
+
+    if not title:
+        return jsonify({'error': 'title is required'}), 400
+
+    from datetime import date as _date
+    import uuid as _uuid
+
+    videos = _load_videos()
+    vid_id = 'vid_' + _uuid.uuid4().hex[:8]
+    videos.append({
+        'id':            vid_id,
+        'title':         title,
+        'description':   description,
+        'category':      category,
+        'thumbnail_url': thumbnail_url,
+        'vhx_url':       vhx_url,
+        'created_at':    str(_date.today()),
+    })
+    _save_videos(videos)
+
+    r = jsonify({'success': True, 'id': vid_id})
+    r.headers['Access-Control-Allow-Origin'] = '*'
+    return r
+
+
+@app.route('/admin/pdfs', methods=['GET', 'POST'])
+@_admin_required
+def admin_pdfs():
+    message = None
+    if request.method == 'POST':
+        title       = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        category    = request.form.get('category', 'other').strip()
+        pdf_file    = request.files.get('pdf_file')
+        thumb_file  = request.files.get('thumbnail_file')
+
+        if not title or not pdf_file:
+            message = 'Error: title and PDF file are required.'
+        else:
+            os.makedirs(_pdfs_dir, exist_ok=True)
+            os.makedirs(_thumbs_dir, exist_ok=True)
+
+            import uuid as _uuid
+            uid = _uuid.uuid4().hex[:8]
+            pdf_name = uid + '_' + _safe_filename(pdf_file.filename or 'file.pdf')
+            pdf_file.save(os.path.join(_pdfs_dir, pdf_name))
+            pdf_url = '/static/pdfs/' + pdf_name
+
+            thumb_url = None
+            if thumb_file and thumb_file.filename:
+                thumb_name = uid + '_' + _safe_filename(thumb_file.filename)
+                thumb_file.save(os.path.join(_thumbs_dir, thumb_name))
+                thumb_url = '/static/pdf-thumbs/' + thumb_name
+
+            pdfs = _load_pdfs()
+            pdfs.append({
+                'id':          uid,
+                'title':       title,
+                'description': description,
+                'category':    category,
+                'url':         pdf_url,
+                'thumbnail':   thumb_url,
+            })
+            _save_pdfs(pdfs)
+            message = f'"{title}" uploaded successfully.'
+
+    pdfs = _load_pdfs()
+    return render_template('admin_pdfs.html', pdfs=pdfs, message=message)
+
+
+@app.route('/admin/pdfs/delete', methods=['POST'])
+@_admin_required
+def admin_pdfs_delete():
+    pdf_id = request.form.get('pdf_id', '').strip()
+    pdfs   = _load_pdfs()
+    entry  = next((p for p in pdfs if p['id'] == pdf_id), None)
+    if entry:
+        # Remove files
+        for field in ('url', 'thumbnail'):
+            rel = entry.get(field)
+            if rel:
+                fpath = os.path.join(_base, rel.lstrip('/'))
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+        pdfs = [p for p in pdfs if p['id'] != pdf_id]
+        _save_pdfs(pdfs)
+    return redirect(url_for('admin_pdfs'))
 
 
 if __name__ == '__main__':

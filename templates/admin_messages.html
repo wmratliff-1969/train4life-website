@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% block title %}Messages — Admin{% endblock %}
+
+{% block head_extra %}
+<style>
+  .admin-msg-wrap {
+    display: flex;
+    height: calc(100vh - 60px);
+    margin-top: 60px;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .admin-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: #1a1a1a;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    overflow-y: auto;
+  }
+  .sidebar-section-head {
+    padding: 0.85rem 1rem 0.5rem;
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+  }
+  .convo-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-left: 3px solid transparent;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .convo-row:hover  { background: rgba(255,255,255,0.04); }
+  .convo-row.active { background: rgba(34,185,176,0.1); border-left-color: #22b9b0; }
+  .convo-icon {
+    font-size: 1.2rem; flex-shrink: 0;
+  }
+  .convo-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg,#22b9b0,#2f8c78);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.88rem; font-weight: 800; color: #fff; flex-shrink: 0;
+  }
+  .convo-info { flex: 1; min-width: 0; }
+  .convo-name    { font-size: 0.85rem; font-weight: 700; color: #fff; }
+  .convo-preview { font-size: 0.72rem; color: rgba(255,255,255,0.38); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .convo-badge {
+    background: #e53e3e; color: #fff; font-size: 10px; font-weight: 800;
+    min-width: 18px; height: 18px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center; padding: 0 3px; flex-shrink: 0;
+  }
+
+  /* ── Panel ── */
+  .admin-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+  .panel-header {
+    padding: 0.9rem 1.4rem;
+    background: #1a1a1a;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .panel-header h2  { margin: 0; font-size: 0.95rem; font-weight: 800; letter-spacing: 0.05em; }
+  .panel-header .ph-sub { font-size: 0.75rem; color: rgba(255,255,255,0.38); margin-top: 2px; }
+
+  #panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .panel-placeholder {
+    margin: auto; text-align: center;
+    color: rgba(255,255,255,0.28); font-size: 0.85rem;
+  }
+
+  /* ── Bubbles ── */
+  .bubble-wrap { display: flex; flex-direction: column; max-width: 72%; }
+  .bubble-wrap.mine   { align-self: flex-end;   align-items: flex-end; }
+  .bubble-wrap.theirs { align-self: flex-start; align-items: flex-start; }
+  .bubble-sender { font-size: 0.7rem; color: rgba(255,255,255,0.38); margin-bottom: 3px; font-weight: 600; }
+  .bubble { padding: 0.5rem 0.85rem; border-radius: 18px; font-size: 0.88rem; line-height: 1.45; word-break: break-word; }
+  .mine   .bubble { background: rgba(34,185,176,0.22); border: 1px solid rgba(34,185,176,0.38); color: #fff; border-bottom-right-radius: 4px; }
+  .theirs .bubble { background: #2a2a2a; color: #fff; border-bottom-left-radius: 4px; }
+  .bubble-time { font-size: 0.67rem; color: rgba(255,255,255,0.22); margin-top: 3px; }
+
+  /* ── Input area — always visible ── */
+  .message-input-area {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.4rem;
+    background: #1e1e1e;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .message-input {
+    flex: 1;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 22px;
+    padding: 0.6rem 1.1rem;
+    color: #fff;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .message-input:focus        { border-color: rgba(34,185,176,0.5); }
+  .message-input::placeholder { color: rgba(255,255,255,0.28); }
+  .message-input:disabled     { opacity: 0.35; cursor: not-allowed; }
+  .send-btn {
+    background: #22b9b0;
+    color: #fff;
+    border: none;
+    border-radius: 22px;
+    padding: 0.6rem 1.3rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .send-btn:hover    { background: #1da8a0; }
+  .send-btn:disabled { background: #444; cursor: not-allowed; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-msg-wrap">
+
+  <!-- Sidebar -->
+  <div class="admin-sidebar">
+
+    <div class="sidebar-section-head">Group Chats</div>
+
+    <div class="convo-row" onclick="openChat(this,'announcements','📢 Announcements','Post to all members')">
+      <div class="convo-icon">📢</div>
+      <div class="convo-info">
+        <div class="convo-name">Announcements</div>
+        <div class="convo-preview">Post to all members</div>
+      </div>
+    </div>
+
+    <div class="convo-row" onclick="openChat(this,'express','⚡ Express Community','Express group chat')">
+      <div class="convo-icon">⚡</div>
+      <div class="convo-info">
+        <div class="convo-name">Express Community</div>
+        <div class="convo-preview">Express group chat</div>
+      </div>
+    </div>
+
+    <div class="convo-row" onclick="openChat(this,'bible','📖 Bible Bootcamp','Bible Bootcamp group chat')">
+      <div class="convo-icon">📖</div>
+      <div class="convo-info">
+        <div class="convo-name">Bible Bootcamp</div>
+        <div class="convo-preview">BB group chat</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section-head" style="margin-top:0.4rem;">Direct Messages</div>
+    {% if dm_convos %}
+      {% for c in dm_convos %}
+      <div class="convo-row" onclick="openDM(this,'{{ c.email }}','{{ c.name|e }}')">
+        <div class="convo-avatar">{{ c.name[0]|upper }}</div>
+        <div class="convo-info">
+          <div class="convo-name">{{ c.name }}</div>
+          <div class="convo-preview">{{ c.last_message }}</div>
+        </div>
+        {% if c.unread > 0 %}<div class="convo-badge">{{ c.unread }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding:0.8rem 1rem;font-size:0.78rem;color:rgba(255,255,255,0.25);">No DMs yet.</div>
+    {% endif %}
+
+  </div>
+
+  <!-- Chat panel -->
+  <div class="admin-panel">
+
+    <div class="panel-header">
+      <h2 id="panel-title">Messages</h2>
+      <div class="ph-sub" id="panel-sub">Select a conversation on the left to begin.</div>
+    </div>
+
+    <div id="panel-body">
+      <div class="panel-placeholder">Select a conversation on the left.</div>
+    </div>
+
+    <div class="message-input-area">
+      <input
+        type="text"
+        id="messageInput"
+        class="message-input"
+        placeholder="Select a conversation to start messaging…"
+        onkeydown="if(event.key==='Enter')sendMessage();"
+        disabled
+      >
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+var currentChat        = null;
+var currentMemberEmail = null;
+var lastSince          = '';
+var pollTimer          = null;
+
+function openChat(el, chatId, title, sub) {
+  setActive(el);
+  currentChat        = chatId;
+  currentMemberEmail = null;
+  lastSince          = '';
+  document.getElementById('panel-title').textContent     = title;
+  document.getElementById('panel-sub').textContent       = sub;
+  document.getElementById('messageInput').placeholder    = 'Post to ' + title + '…';
+  document.getElementById('messageInput').disabled       = false;
+  document.getElementById('sendBtn').disabled            = false;
+  document.getElementById('panel-body').innerHTML        = '<div class="panel-placeholder">Loading…</div>';
+  loadMessages();
+  resetPoll();
+}
+
+function openDM(el, email, name) {
+  setActive(el);
+  currentChat        = 'dm';
+  currentMemberEmail = email;
+  lastSince          = '';
+  document.getElementById('panel-title').textContent     = name;
+  document.getElementById('panel-sub').textContent       = email;
+  document.getElementById('messageInput').placeholder    = 'Reply to ' + name + '…';
+  document.getElementById('messageInput').disabled       = false;
+  document.getElementById('sendBtn').disabled            = false;
+  document.getElementById('panel-body').innerHTML        = '<div class="panel-placeholder">Loading…</div>';
+  var badge = el.querySelector('.convo-badge');
+  if (badge) badge.remove();
+  loadMessages();
+  resetPoll();
+}
+
+function setActive(el) {
+  document.querySelectorAll('.convo-row').forEach(function(x){ x.classList.remove('active'); });
+  el.classList.add('active');
+}
+
+function loadMessages() {
+  var url = '/api/messages?chat=' + encodeURIComponent(currentChat);
+  if (currentMemberEmail) url += '&member_id=' + encodeURIComponent(currentMemberEmail);
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      renderAll(d.messages || []);
+      if (d.messages && d.messages.length)
+        lastSince = d.messages[d.messages.length-1].created_at;
+    })
+    .catch(function(){ showPlaceholder('Could not load messages.'); });
+}
+
+function resetPoll() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(function(){
+    if (!currentChat) return;
+    var url = '/api/messages?chat=' + encodeURIComponent(currentChat);
+    if (currentMemberEmail) url += '&member_id=' + encodeURIComponent(currentMemberEmail);
+    if (lastSince) url += '&since=' + encodeURIComponent(lastSince);
+    fetch(url)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var msgs = d.messages || [];
+        if (!msgs.length) return;
+        var body     = document.getElementById('panel-body');
+        var atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+        msgs.forEach(function(m){ body.appendChild(mkBubble(m)); });
+        if (atBottom) body.scrollTop = body.scrollHeight;
+        lastSince = msgs[msgs.length-1].created_at;
+      })
+      .catch(function(){});
+  }, 5000);
+}
+
+function renderAll(msgs) {
+  var body = document.getElementById('panel-body');
+  if (!msgs.length) { showPlaceholder('No messages yet. Send the first one!'); return; }
+  body.innerHTML = '';
+  msgs.forEach(function(m){ body.appendChild(mkBubble(m)); });
+  body.scrollTop = body.scrollHeight;
+  lastSince = msgs[msgs.length-1].created_at;
+}
+
+function showPlaceholder(msg) {
+  document.getElementById('panel-body').innerHTML = '<div class="panel-placeholder">'+msg+'</div>';
+}
+
+function mkBubble(m) {
+  var isMine = m.is_admin;
+  var wrap   = document.createElement('div');
+  wrap.className = 'bubble-wrap ' + (isMine ? 'mine' : 'theirs');
+  if (!isMine) {
+    var s = document.createElement('div');
+    s.className = 'bubble-sender';
+    s.textContent = m.sender_name;
+    wrap.appendChild(s);
+  }
+  var b = document.createElement('div');
+  b.className   = 'bubble';
+  b.textContent = m.content;
+  wrap.appendChild(b);
+  var t = document.createElement('div');
+  t.className   = 'bubble-time';
+  t.textContent = fmtTime(m.created_at);
+  wrap.appendChild(t);
+  return wrap;
+}
+
+function fmtTime(iso) {
+  var d = new Date(iso), diff = (Date.now()-d)/1000;
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return Math.floor(diff/60)+'m ago';
+  if (diff < 86400) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  return d.toLocaleDateString([],{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+}
+
+function sendMessage() {
+  var inp     = document.getElementById('messageInput');
+  var btn     = document.getElementById('sendBtn');
+  var content = inp.value.trim();
+  if (!content || !currentChat) return;
+  btn.disabled = true;
+  var payload  = {chat: currentChat, content: content};
+  if (currentMemberEmail) payload.member_id = currentMemberEmail;
+  fetch('/api/messages', {
+    method:  'POST',
+    headers: {'Content-Type':'application/json'},
+    body:    JSON.stringify(payload),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    btn.disabled = false;
+    if (d.message) {
+      var body = document.getElementById('panel-body');
+      body.appendChild(mkBubble(d.message));
+      body.scrollTop = body.scrollHeight;
+      lastSince = d.message.created_at;
+    }
+    inp.value = '';
+    inp.focus();
+  })
+  .catch(function(){ btn.disabled = false; });
+}
+</script>
+{% endblock %}

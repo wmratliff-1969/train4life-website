@@ -47,11 +47,21 @@
 
     /* ===== NAV ===== */
     nav {
-      background: #141414;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-      position: sticky;
+      position: fixed;
       top: 0;
-      z-index: 100;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: transparent;
+      border-bottom: none;
+      transition: background 0.3s ease, border-color 0.3s ease;
+    }
+
+    nav.nav-scrolled {
+      background: rgba(20, 20, 20, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
     }
 
     .nav-inner {
@@ -72,6 +82,7 @@
       color: #fff;
       white-space: nowrap;
       flex-shrink: 0;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
     }
 
     .logo span {
@@ -85,14 +96,88 @@
     }
 
     .nav-links a {
-      font-size: 0.9rem;
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       color: rgba(255,255,255,0.75);
       transition: color 0.2s;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      text-transform: uppercase;
     }
 
     .nav-links a:hover {
       color: #22b9b0;
+    }
+
+    /* ── LIVE nav button — three states ── */
+    .nav-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 14px 50px;
+      border-radius: 30px;
+      min-width: 180px;
+      justify-content: center;
+      margin-left: 30px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: transform 0.15s;
+    }
+
+    /* STATE 1 — off */
+    .nav-live.state-off {
+      background: #1a1a1a;
+      border: 3px solid #555555;
+      color: #888888;
+    }
+    .nav-live.state-off:hover {
+      border-color: #777;
+      color: #aaa;
+    }
+
+    /* STATE 2 — soon */
+    .nav-live.state-soon {
+      background: #1a1a1a;
+      border: 3px solid #CC0000;
+      color: #ffffff;
+      box-shadow: 0 0 20px rgba(204,0,0,0.5);
+      animation: pulseBorder 1.5s ease-in-out infinite;
+    }
+    .nav-live.state-soon:hover { transform: scale(1.03); }
+
+    @keyframes pulseBorder {
+      0%, 100% { box-shadow: 0 0 10px rgba(204,0,0,0.4); }
+      50%       { box-shadow: 0 0 30px rgba(204,0,0,0.9); }
+    }
+
+    /* STATE 3 — live */
+    .nav-live.state-live {
+      background: #CC0000;
+      border: 3px solid #FF0000;
+      color: #ffffff;
+      box-shadow: 0 0 25px rgba(255,0,0,0.7);
+    }
+    .nav-live.state-live:hover { transform: scale(1.04); }
+
+    .nav-live-dot {
+      font-style: normal;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .nav-live.state-soon .nav-live-dot {
+      display: inline-block;
+      animation: dotPulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { opacity: 1;   transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(1.4); }
     }
 
     .nav-right {
@@ -339,7 +424,7 @@
       position: absolute;
       inset: 0;
       background-image: url('/static/images/hero-bg.jpg');
-      background-position: center center;
+      background-position: top center;
       background-size: cover;
       background-repeat: no-repeat;
       z-index: 0;
@@ -355,7 +440,7 @@
     .hero-content {
       position: relative;
       z-index: 1;
-      padding: 5rem 2rem 60px 60px;
+      padding: 3rem 2rem 60px 60px;  /* main already has padding-top for nav+bar */
       width: 100%;
       max-width: 860px;
       display: flex;
@@ -733,7 +818,7 @@
 
     /* ===== LOGIN / FORM ===== */
     .auth-wrap {
-      min-height: calc(100vh - 60px);
+      min-height: calc(100vh - 160px); /* nav 60 + bar 40 + some breathing room */
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1138,21 +1223,194 @@
     main {
       flex: 1;
     }
+
+    /* ===== LIVE STATUS BAR ===== */
+    #live-status-bar {
+      position: fixed;
+      top: 60px;
+      left: 0;
+      right: 0;
+      z-index: 998;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.25s;
+    }
+
+    /* STATE: off + countdown — two-line stacked layout */
+    #live-status-bar.bar-off,
+    #live-status-bar.bar-countdown {
+      background: #1a1a1a;
+      border-bottom: 2px solid #333333;
+      padding: 14px 20px;
+    }
+    #live-status-bar.bar-countdown {
+      border-bottom-color: #CC0000;
+    }
+    #live-status-bar.bar-countdown.almost-live {
+      background: #440000;
+      animation: almostLivePulse 1.2s ease-in-out infinite;
+    }
+    @keyframes almostLivePulse {
+      0%, 100% { background: #440000; }
+      50%       { background: #5a0000; }
+    }
+    #live-status-bar.bar-off .bar-inner,
+    #live-status-bar.bar-countdown .bar-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      width: 100%;
+      max-width: 1000px;
+      line-height: 1.8;
+    }
+    /* Top line — timer row */
+    .bar-top-line {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 900;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+    .bar-countdown-clock {
+      font-size: 20px;
+      font-weight: 900;
+      color: #555555;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+    }
+    #live-status-bar.bar-countdown .bar-countdown-clock {
+      color: #FF4444;
+    }
+    #live-status-bar.bar-countdown.almost-live .bar-countdown-clock {
+      color: #FF8888;
+    }
+    /* Bottom line — explanation */
+    .bar-bottom-line {
+      font-size: 16px;
+      font-weight: 700;
+      color: #cccccc;
+      white-space: nowrap;
+    }
+    #live-status-bar.bar-off:hover,
+    #live-status-bar.bar-countdown:hover { background: #222222; }
+    #live-status-bar.bar-countdown.almost-live:hover { background: #4a0000; }
+
+    /* STATE: live */
+    #live-status-bar.bar-live {
+      background: #CC0000;
+      padding: 20px;
+      animation: liveBarPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes liveBarPulse {
+      0%, 100% { background: #CC0000; box-shadow: 0 2px 20px rgba(255,0,0,0.4); }
+      50%       { background: #e60000; box-shadow: 0 2px 36px rgba(255,0,0,0.7); }
+    }
+    #live-status-bar.bar-live .bar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      width: 100%;
+      max-width: 1000px;
+      padding: 0 2rem;
+    }
+    #live-status-bar.bar-live .bar-text {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: 0.05em;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.4);
+      white-space: nowrap;
+    }
+    .bar-join-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #fff;
+      color: #CC0000;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 10px 22px;
+      border-radius: 25px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.3);
+    }
+    #live-status-bar.bar-live:hover .bar-join-btn {
+      transform: scale(1.05);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    /* Push main content below nav (60px) + live bar */
+    body.bar-off       main { padding-top: 60px;  } /* nav only — bar hidden when off */
+    body.bar-countdown main { padding-top: 138px; } /* 60 nav + 78 two-line bar */
+    body.bar-live      main { padding-top: 125px; } /* 60 nav + 65 one-line bar */
+
+    @media (max-width: 700px) {
+      #live-status-bar.bar-countdown .bar-remind-link { display: none; }
+      #live-status-bar.bar-countdown .bar-countdown-clock { font-size: 18px; }
+      #live-status-bar.bar-live .bar-text  { font-size: 15px; }
+      #live-status-bar.bar-live .bar-inner { gap: 1rem; }
+      .bar-join-btn { font-size: 13px; padding: 8px 16px; }
+      .nav-live { padding: 10px 24px; font-size: 15px; min-width: 120px; }
+    }
   </style>
 </head>
-<body>
+<body class="bar-{{ live_status }}">
   <nav>
     <div class="nav-inner">
       <a href="/" class="logo">TRAIN<span>4</span>LIFE</a>
 
       <ul class="nav-links" id="navLinks">
-        <li><a href="/browse">Browse</a></li>
-        <li><a href="/forum">Forums</a></li>
-        <li><a href="#" id="search-nav-toggle" onclick="openSearch(event)">Search</a></li>
+        <li><a href="/browse" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Browse</a></li>
+        <li><a href="/forum" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Forums</a></li>
+        <li><a href="#" id="search-nav-toggle" onclick="openSearch(event)" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Search</a></li>
+        {% if session.get('logged_in') %}
+        <li style="position:relative;">
+          <a href="/messages" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Messages</a>
+          <span id="nav-msg-dot" style="display:none;position:absolute;top:0;right:-8px;width:8px;height:8px;border-radius:50%;background:#e53e3e;"></span>
+        </li>
+        {% endif %}
+        <li><a href="/resources" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Resources</a></li>
+        <li>
+          {% if live_status == 'live' %}
+            <a href="{{ live_stream_url if live_stream_url else '/live' }}"
+               {% if live_stream_url %}target="_blank" rel="noopener noreferrer"{% endif %}
+               class="nav-live state-live"
+               style="display:inline-flex;align-items:center;gap:8px;background:#CC0000;border:3px solid #FF0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 25px rgba(255,0,0,0.7);">
+              🔴 LIVE NOW
+            </a>
+          {% elif live_status == 'countdown' %}
+            <a href="/live" class="nav-live state-countdown"
+               style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:3px solid #CC0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 20px rgba(204,0,0,0.5);">
+              🔴 LIVE SOON
+            </a>
+          {% else %}
+            <a href="/live" class="nav-live state-off"
+               style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:3px solid #333;color:#555;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;pointer-events:none;cursor:default;">
+              ⚫ LIVE
+            </a>
+          {% endif %}
+        </li>
       </ul>
 
       <div class="nav-right">
         {% if session.get('logged_in') %}
+          <a href="/messages" id="nav-messages-link" style="position:relative; display:inline-flex; align-items:center; font-size:0.85rem; font-weight:700; letter-spacing:0.05em; color:rgba(255,255,255,0.75); transition:color 0.2s; text-transform:uppercase;"
+             onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.75)'">
+            Messages
+            <span id="nav-msg-badge" style="display:none; position:absolute; top:-6px; right:-10px; background:#e53e3e; color:#fff; font-size:10px; font-weight:800; min-width:16px; height:16px; border-radius:8px; line-height:16px; text-align:center; padding:0 3px;"></span>
+          </a>
           <a href="/account" style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:600; color:rgba(255,255,255,0.75); transition:color 0.2s;"
              onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.75)'">
             <span style="width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#22b9b0,#2f8c78); display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:700; color:#fff; flex-shrink:0;">
@@ -1174,6 +1432,101 @@
       </button>
     </div>
   </nav>
+
+  <!-- ===== LIVE STATUS BAR (hidden when off) ===== -->
+  {% if live_status != 'off' %}
+  <a href="{{ live_stream_url if live_stream_url and live_status == 'live' else '/live' }}"
+     {% if live_stream_url and live_status == 'live' %}target="_blank" rel="noopener noreferrer"{% endif %}
+     id="live-status-bar" class="bar-{{ live_status }}">
+    {% if live_status == 'live' %}
+      <div class="bar-inner">
+        <span class="bar-text">🔴 WE ARE LIVE NOW — CLICK TO WATCH</span>
+        <span class="bar-join-btn">WATCH NOW →</span>
+      </div>
+    {% elif live_status == 'countdown' %}
+      <!-- Two-line layout: timer on top, message below -->
+      <div class="bar-inner">
+        <div class="bar-top-line">
+          🔴 NEXT LIVE SESSION IN &nbsp;
+          <span class="bar-countdown-clock" id="nav-countdown">--:--:--</span>
+        </div>
+        <div class="bar-bottom-line" id="bar-explanation">
+          {{ live_status_message }}
+        </div>
+      </div>
+    {% endif %}
+  </a>
+  {% endif %}
+
+  {% if live_status == 'countdown' and live_countdown_to %}
+  <script>
+    (function() {
+      var goLiveAt  = new Date("{{ live_countdown_to }}");
+      var streamURL = "{{ live_stream_url | e }}";
+      var bar   = document.getElementById('live-status-bar');
+      var clock = document.getElementById('nav-countdown');
+      var expl  = document.getElementById('bar-explanation');
+      var ALMOST   = 30 * 60 * 1000;
+      var wentLive = false;
+
+      // Called exactly once when the countdown clock crosses zero.
+      // Does NOT write anything to the server — Jeff still manually sets Off Air.
+      function goLiveNow() {
+        if (wentLive) return;
+        wentLive = true;
+
+        // ── Status bar → live appearance ──────────────────────
+        if (bar) {
+          bar.className = 'bar-live';
+          if (streamURL) {
+            bar.href = streamURL;
+            bar.setAttribute('target', '_blank');
+            bar.setAttribute('rel', 'noopener noreferrer');
+          } else {
+            bar.href = '/live';
+          }
+          bar.innerHTML = '<div class="bar-inner"><span class="bar-text">🔴 WE ARE LIVE NOW — CLICK TO WATCH</span><span class="bar-join-btn">WATCH NOW →</span></div>';
+        }
+
+        // ── Nav LIVE button → solid red ───────────────────────
+        var navLive = document.querySelector('.nav-live');
+        if (navLive) {
+          navLive.className = 'nav-live state-live';
+          navLive.style.cssText = 'display:inline-flex;align-items:center;gap:8px;background:#CC0000;border:3px solid #FF0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 25px rgba(255,0,0,0.7);pointer-events:auto;cursor:pointer;';
+          navLive.textContent = '🔴 LIVE NOW';
+          if (streamURL) {
+            navLive.href = streamURL;
+            navLive.setAttribute('target', '_blank');
+            navLive.setAttribute('rel', 'noopener noreferrer');
+          } else {
+            navLive.href = '/live';
+            navLive.removeAttribute('target');
+          }
+        }
+      }
+
+      function updateNavCountdown() {
+        var diff = goLiveAt - new Date();
+        if (diff <= 0) {
+          goLiveNow();
+          return;
+        }
+        var h = Math.floor(diff / 3600000);
+        var m = Math.floor((diff % 3600000) / 60000);
+        var s = Math.floor((diff % 60000) / 1000);
+        if (clock) {
+          clock.textContent = h + 'h ' + String(m).padStart(2,'0') + 'm ' + String(s).padStart(2,'0') + 's';
+        }
+        if (diff < ALMOST && bar && !bar.classList.contains('almost-live')) {
+          bar.classList.add('almost-live');
+          if (expl) expl.textContent = '🔴 ALMOST LIVE! Get ready! Click to join →';
+        }
+      }
+      setInterval(updateNavCountdown, 1000);
+      updateNavCountdown();
+    })();
+  </script>
+  {% endif %}
 
   <main>
     {% block content %}{% endblock %}
@@ -1280,6 +1633,103 @@
         } catch(e) {}
       }, 250);
     }
+
+    // ── Netflix-style transparent → solid nav on scroll ──
+    (function() {
+      const nav = document.querySelector('nav');
+      function updateNav() {
+        if (window.scrollY > 50) {
+          nav.classList.add('nav-scrolled');
+        } else {
+          nav.classList.remove('nav-scrolled');
+        }
+      }
+      window.addEventListener('scroll', updateNav, { passive: true });
+      updateNav(); // run once on load in case page is already scrolled
+    })();
   </script>
+
+  {% if session.get('is_admin') %}
+  <div style="position:fixed;bottom:0;left:0;right:0;background:#CC0000;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:700;z-index:9999;letter-spacing:0.5px;">
+    🔴 ADMIN MODE &mdash;
+    <a href="/admin/dashboard" style="color:#fff;text-decoration:underline;">Back to Dashboard</a>
+    &nbsp;&middot;&nbsp;
+    <a href="/admin/logout" style="color:rgba(255,255,255,0.75);text-decoration:none;">Exit</a>
+  </div>
+  {% endif %}
+
+  {% if session.get('logged_in') %}
+  <script>
+  (function() {
+    var dot       = document.getElementById('nav-msg-dot');
+    var badge     = document.getElementById('nav-msg-badge');
+    var lastCount = -1;  // -1 = first load, don't ding on initial check
+    var _audio    = null;
+    var _audioOk  = false;
+
+    // Unlock audio on first interaction (browser autoplay policy)
+    document.addEventListener('click', function unlockAudio() {
+      try {
+        if (!_audio) _audio = new Audio('/static/sounds/message.mp3');
+        _audio.play().then(function(){ _audio.pause(); _audio.currentTime = 0; _audioOk = true; }).catch(function(){});
+      } catch(e) {}
+      document.removeEventListener('click', unlockAudio);
+    }, { once: true });
+
+    function playDing() {
+      if (!_audioOk) return;
+      try {
+        _audio.currentTime = 0;
+        _audio.play().catch(function(){});
+      } catch(e) {}
+    }
+
+    function showBrowserNotif(text) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') {
+        Notification.requestPermission();
+        return;
+      }
+      if (!document.hidden) return;
+      try {
+        new Notification('TRAIN4LIFE — New Message', {
+          body: text || 'You have a new message.',
+          icon: '/static/images/logo.png'
+        });
+      } catch(e) {}
+    }
+
+    function checkUnread() {
+      fetch('/api/messages/unread').then(function(r){ return r.json(); }).then(function(d){
+        var n = d.count || 0;
+        if (dot)   dot.style.display   = n > 0 ? 'block'        : 'none';
+        if (badge) {
+          badge.textContent   = n > 99 ? '99+' : n;
+          badge.style.display = n > 0  ? 'inline-block' : 'none';
+        }
+        // Only ding/notify if count genuinely increased after first load
+        if (lastCount >= 0 && n > lastCount) {
+          playDing();
+          showBrowserNotif('You have ' + n + ' unread message' + (n === 1 ? '' : 's') + '.');
+        }
+        lastCount = n;
+      }).catch(function(){});
+    }
+
+    // Request notification permission early (after user gesture isn't required here
+    // but browsers may silently ignore until interaction — acceptable)
+    if ('Notification' in window && Notification.permission === 'default') {
+      // Request on first user click to satisfy browser policy
+      document.addEventListener('click', function once() {
+        Notification.requestPermission();
+        document.removeEventListener('click', once);
+      }, { once: true });
+    }
+
+    checkUnread();
+    setInterval(checkUnread, 10000);
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>

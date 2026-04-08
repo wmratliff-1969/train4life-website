@@ -32,6 +32,8 @@
           placeholder="you@example.com"
           required
           autocomplete="email"
+          autocorrect="off"
+          autocapitalize="none"
         >
       </div>
 
@@ -44,12 +46,15 @@
           placeholder="••••••••"
           required
           autocomplete="current-password"
+          autocorrect="off"
+          autocapitalize="none"
+          spellcheck="false"
         >
       </div>
 
       <div style="text-align:right; margin-bottom:1rem; margin-top:-0.25rem;">
-        <a href="#" style="font-size:0.8rem; color:rgba(255,255,255,0.4); transition:color 0.2s;"
-           onmouseover="this.style.color='#22b9b0'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+        <a href="/forgot-password" style="font-size:0.8rem; color:#22b9b0; text-decoration:none; transition:opacity 0.2s;"
+           onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
           Forgot password?
         </a>
       </div>

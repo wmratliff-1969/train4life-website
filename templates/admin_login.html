@@ -1,25 +1,75 @@
-{% extends "base.html" %}
-{% block title %}Admin Login — TRAIN4LIFE{% endblock %}
-
-{% block content %}
-<div style="min-height:60vh; display:flex; align-items:center; justify-content:center; padding:3rem 1rem;">
-  <div style="background:#111; border:1px solid rgba(34,185,176,0.2); border-radius:16px; padding:2.5rem 2rem; width:100%; max-width:380px;">
-    <div style="font-size:0.7rem; color:#22b9b0; font-weight:700; letter-spacing:3px; text-transform:uppercase; text-align:center; margin-bottom:0.5rem;">Admin Access</div>
-    <h1 style="font-size:1.4rem; font-weight:900; text-align:center; margin-bottom:2rem; letter-spacing:1px;">TRAIN4LIFE</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Login — TRAIN4LIFE</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f4f5; color: #111; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-wrap {
+      background: #fff; border: 1px solid #e4e4e7; border-radius: 16px;
+      padding: 40px 36px; width: 100%; max-width: 380px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+    .login-logo {
+      font-size: 1.3rem; font-weight: 900; letter-spacing: 2px;
+      text-align: center; color: #111; margin-bottom: 4px;
+    }
+    .login-logo span { color: #CC0000; }
+    .login-sub {
+      font-size: 0.72rem; font-weight: 700; color: #9ca3af;
+      text-align: center; letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+    .error-box {
+      background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px;
+      padding: 10px 14px; color: #b91c1c; font-size: 0.83rem; font-weight: 600;
+      margin-bottom: 18px;
+    }
+    label {
+      display: block; font-size: 0.72rem; font-weight: 700;
+      color: #374151; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+    input[type="password"] {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 10px 14px; font-size: 0.95rem; color: #111; background: #fff;
+      margin-bottom: 20px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input[type="password"]:focus { border-color: #CC0000; box-shadow: 0 0 0 3px rgba(204,0,0,0.08); }
+    .login-btn {
+      width: 100%; background: #CC0000; border: none; border-radius: 8px;
+      padding: 11px; color: #fff; font-size: 0.9rem; font-weight: 800;
+      letter-spacing: 1px; cursor: pointer; transition: filter 0.15s;
+    }
+    .login-btn:hover { filter: brightness(1.1); }
+    .login-back {
+      display: block; text-align: center; margin-top: 20px;
+      font-size: 0.78rem; color: #9ca3af; text-decoration: none;
+    }
+    .login-back:hover { color: #374151; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-logo">TRAIN<span>4</span>LIFE</div>
+    <div class="login-sub">Admin Access</div>
 
     {% if error %}
-    <div style="background:rgba(255,80,80,0.12); border:1px solid rgba(255,80,80,0.3); border-radius:8px; padding:0.75rem 1rem; color:#ff8080; font-size:0.85rem; margin-bottom:1.2rem;">{{ error }}</div>
+    <div class="error-box">{{ error }}</div>
     {% endif %}
 
     <form method="POST">
-      <label style="display:block; font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.5); letter-spacing:1px; margin-bottom:0.4rem;">PASSWORD</label>
-      <input type="password" name="password" autofocus required
-        style="width:100%; background:#0d0d0d; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:0.7rem 1rem; color:#fff; font-size:0.95rem; margin-bottom:1.5rem;">
-      <button type="submit"
-        style="width:100%; background:#22b9b0; border:none; border-radius:8px; padding:0.8rem; color:#000; font-weight:900; font-size:0.95rem; letter-spacing:1px; cursor:pointer;">
-        ENTER
-      </button>
+      <label>PASSWORD</label>
+      <input type="password" name="password" autofocus required autocomplete="current-password">
+      <button type="submit" class="login-btn">ENTER</button>
     </form>
+
+    <a href="/" class="login-back">← Back to site</a>
   </div>
-</div>
-{% endblock %}
+</body>
+</html>

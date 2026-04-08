@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — TRAIN4LIFE{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* ── Top bar ── */
+  .chat-topbar {
+    position: fixed;
+    top: 60px;
+    left: 0; right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0 1.4rem;
+    background: #1a1a1a;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 90;
+  }
+  .chat-back {
+    color: #22b9b0; text-decoration: none;
+    font-size: 0.85rem; font-weight: 600; white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .chat-back:hover { text-decoration: underline; }
+  .chat-topbar-title { font-size: 0.95rem; font-weight: 800; }
+  .chat-topbar-sub   { font-size: 0.73rem; color: rgba(255,255,255,0.38); margin-top: 1px; }
+  .video-call-btn {
+    margin-left: auto;
+    background: #e53935; color: #fff; border: none;
+    border-radius: 20px; padding: 0.4rem 1rem;
+    font-size: 0.82rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    display: flex; align-items: center; gap: 0.4rem;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  .video-call-btn:hover    { background: #c62828; }
+  .video-call-btn:disabled { background: #555; cursor: not-allowed; }
+  .video-call-link {
+    display: block; margin: 0.5rem 1.4rem;
+    background: rgba(229,57,53,0.12); border: 1px solid rgba(229,57,53,0.4);
+    border-radius: 10px; padding: 0.7rem 1rem;
+    color: #ff6b6b; font-size: 0.88rem; font-weight: 600;
+    text-align: center; text-decoration: none;
+  }
+  .video-call-link:hover { background: rgba(229,57,53,0.22); }
+
+  /* ── Messages scroll area ── */
+  #msgScroll {
+    position: fixed;
+    top: 116px;   /* 60px nav + 56px topbar */
+    bottom: 70px; /* space for fixed input */
+    left: 0; right: 0;
+    overflow-y: auto;
+    padding: 1rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    background: #141414;
+  }
+  .no-messages {
+    margin: auto; text-align: center;
+    color: rgba(255,255,255,0.28); font-size: 0.88rem;
+  }
+
+  /* ── Bubbles ── */
+  .bubble-row       { display: flex; flex-direction: column; max-width: 70%; }
+  .bubble-row.mine  { align-self: flex-end;   align-items: flex-end; }
+  .bubble-row.other { align-self: flex-start; align-items: flex-start; }
+  .bubble-sender { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.38); margin-bottom: 3px; }
+  .bubble { padding: 0.5rem 0.9rem; border-radius: 18px; font-size: 0.92rem; line-height: 1.45; word-break: break-word; }
+  .mine  .bubble { background: #1a6fb5; color: #fff; border-bottom-right-radius: 4px; }
+  .other .bubble { background: #2a2a2a; color: #fff; border-bottom-left-radius: 4px; }
+  .other.is-jeff .bubble { background: rgba(34,185,176,0.14); border: 1px solid rgba(34,185,176,0.28); }
+  .bubble-time { font-size: 0.67rem; color: rgba(255,255,255,0.22); margin-top: 3px; }
+
+  /* ── Input — pinned to bottom of viewport ── */
+  .message-input-area {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    padding: 12px 1.4rem;
+    z-index: 100;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  #messageInput {
+    flex: 1;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.13);
+    border-radius: 22px;
+    padding: 0.6rem 1.1rem;
+    color: #fff;
+    font-size: 0.92rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #messageInput:focus        { border-color: rgba(34,185,176,0.5); }
+  #messageInput::placeholder { color: rgba(255,255,255,0.28); }
+  #messageInput:disabled     { opacity: 0.35; cursor: not-allowed; }
+  .send-btn {
+    background: #22b9b0; color: #fff; border: none;
+    border-radius: 22px; padding: 0.6rem 1.3rem;
+    font-size: 0.88rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  .send-btn:hover    { background: #1da8a0; }
+  .send-btn:disabled { background: #555; cursor: not-allowed; }
+  .readonly-msg {
+    flex: 1; text-align: center;
+    color: rgba(255,255,255,0.3); font-size: 0.82rem;
+  }
+  .send-error {
+    position: fixed;
+    bottom: 70px;
+    left: 50%; transform: translateX(-50%);
+    background: rgba(220,50,50,0.9);
+    color: #fff; font-size: 0.82rem; font-weight: 600;
+    padding: 0.4rem 1rem; border-radius: 20px;
+    z-index: 101; display: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="chat-topbar">
+  <a href="/messages" class="chat-back">← Back</a>
+  <div>
+    <div class="chat-topbar-title">{{ title }}</div>
+    <div class="chat-topbar-sub">{{ subtitle }}</div>
+  </div>
+  {% if is_dm %}
+  <button class="video-call-btn" id="videoBtn" onclick="startVideoCall()">
+    📹 Video Call
+  </button>
+  {% endif %}
+</div>
+
+{% if is_dm %}
+<div id="videoCallBar" style="display:none;">
+  <a id="videoCallLink" class="video-call-link" href="#" target="_blank">
+    📹 Tap to join video call →
+  </a>
+</div>
+{% endif %}
+
+<div id="msgScroll">
+  {% if messages %}
+    {% for m in messages %}
+      <div class="bubble-row {{ 'mine' if m.sender_id == my_email else 'other' }} {{ 'is-jeff' if m.is_admin and m.sender_id != my_email else '' }}"
+           data-id="{{ m.id }}">
+        {% if m.sender_id != my_email %}
+          <div class="bubble-sender">{{ '⚡ ' if m.is_admin else '' }}{{ m.sender_name }}</div>
+        {% endif %}
+        <div class="bubble">{{ m.content | linkify }}</div>
+        <div class="bubble-time" data-iso="{{ m.created_at }}">{{ m.created_at[:16].replace('T',' ') }}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="no-messages" id="emptyMsg">
+      {% if is_readonly %}No announcements yet.{% else %}No messages yet. Say hello! 👋{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="send-error" id="sendError"></div>
+
+<div class="message-input-area">
+  {% if is_readonly %}
+    <div class="readonly-msg">Only Jeff can post to Announcements.</div>
+  {% else %}
+    <input type="text" id="messageInput" placeholder="Type a message…"
+           autocomplete="off" maxlength="2000">
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+  {% endif %}
+</div>
+
+<script>
+var myEmail   = {{ session.get('user_email','') | tojson }};
+var chatId    = {{ chat_id | tojson }};
+var lastSince = '';
+var seenIds   = new Set();
+var scroll    = document.getElementById('msgScroll');
+var _audioCtx = null;
+
+// Resume/create AudioContext on first user gesture (browser autoplay policy)
+document.addEventListener('click', function unlockAudio() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  } catch(e) {}
+  document.removeEventListener('click', unlockAudio);
+}, { once: true });
+
+function playDing() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') { _audioCtx.resume(); }
+    var oscillator = _audioCtx.createOscillator();
+    var gain       = _audioCtx.createGain();
+    oscillator.connect(gain);
+    gain.connect(_audioCtx.destination);
+    oscillator.frequency.value = 800;
+    gain.gain.setValueAtTime(0.3, _audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + 0.3);
+    oscillator.start(_audioCtx.currentTime);
+    oscillator.stop(_audioCtx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+function showBrowserNotif(content, senderName) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!document.hidden) return;
+  try {
+    new Notification('TRAIN4LIFE — ' + (senderName || 'New Message'), {
+      body: content,
+      icon: '/static/images/logo.png'
+    });
+  } catch(e) {}
+}
+
+if ('Notification' in window && Notification.permission === 'default') {
+  document.addEventListener('click', function once() {
+    Notification.requestPermission();
+    document.removeEventListener('click', once);
+  }, { once: true });
+}
+
+// Track IDs already rendered server-side
+document.querySelectorAll('.bubble-row[data-id]').forEach(function(el){
+  seenIds.add(el.getAttribute('data-id'));
+});
+
+// Set lastSince from last rendered message
+var allBubbles = document.querySelectorAll('.bubble-time[data-iso]');
+if (allBubbles.length) {
+  lastSince = allBubbles[allBubbles.length - 1].getAttribute('data-iso');
+  relativeTimestamps();
+}
+
+// Scroll to bottom immediately
+scrollBottom();
+
+// Poll for new messages every 10s
+setInterval(pollNew, 10000);
+
+function pollNew() {
+  var url = '/api/messages?chat=' + encodeURIComponent(chatId);
+  if (lastSince) url += '&since=' + encodeURIComponent(lastSince);
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var msgs = d.messages || [];
+      if (!msgs.length) return;
+      var wasAtBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
+      msgs.forEach(function(m){
+        if (seenIds.has(m.id)) return;
+        seenIds.add(m.id);
+        appendBubble(m);
+        lastSince = m.created_at;
+        // Sound + browser notification for incoming messages (not my own)
+        if (m.sender_id !== myEmail) {
+          playDing();
+          showBrowserNotif(m.content, m.sender_name);
+        }
+        var ph = document.getElementById('emptyMsg');
+        if (ph) ph.remove();
+      });
+      if (wasAtBottom) scrollBottom();
+    })
+    .catch(function(){});
+}
+
+function sendMessage() {
+  var inp     = document.getElementById('messageInput');
+  var btn     = document.getElementById('sendBtn');
+  var content = inp.value.trim();
+  if (!content) return;
+  btn.disabled = true;
+  fetch('/api/messages', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat: chatId, content: content}),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    btn.disabled = false;
+    if (d.error) { showError(d.error); return; }
+    if (d.message) {
+      var m = d.message;
+      seenIds.add(m.id);
+      lastSince = m.created_at;
+      appendBubble(m);
+      scrollBottom();
+      var ph = document.getElementById('emptyMsg');
+      if (ph) ph.remove();
+    }
+    inp.value = '';
+    inp.focus();
+  })
+  .catch(function(){ btn.disabled = false; showError('Could not send. Try again.'); });
+}
+
+function linkifyText(text) {
+  var escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return escaped.replace(/(https?:\/\/[^\s<>"]+)/g,
+    '<a href="$1" target="_blank" rel="noopener" style="color:#4aecd4;text-decoration:underline;">$1</a>');
+}
+
+function appendBubble(m) {
+  var isMine  = (m.sender_id === myEmail);
+  var wrap    = document.createElement('div');
+  wrap.className = 'bubble-row ' + (isMine ? 'mine' : 'other') +
+                   (m.is_admin && !isMine ? ' is-jeff' : '');
+  wrap.setAttribute('data-id', m.id);
+  if (!isMine) {
+    var s = document.createElement('div');
+    s.className   = 'bubble-sender';
+    s.textContent = (m.is_admin ? '⚡ ' : '') + m.sender_name;
+    wrap.appendChild(s);
+  }
+  var b = document.createElement('div');
+  b.className   = 'bubble';
+  b.innerHTML   = linkifyText(m.content);
+  wrap.appendChild(b);
+  var t = document.createElement('div');
+  t.className   = 'bubble-time';
+  t.textContent = 'just now';
+  wrap.appendChild(t);
+  scroll.appendChild(wrap);
+}
+
+function scrollBottom() {
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+function showError(msg) {
+  var el = document.getElementById('sendError');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(function(){ el.style.display = 'none'; }, 3000);
+}
+
+function relativeTimestamps() {
+  document.querySelectorAll('.bubble-time[data-iso]').forEach(function(el){
+    var d = new Date(el.getAttribute('data-iso'));
+    var diff = (Date.now() - d) / 1000;
+    if (diff < 60)         el.textContent = 'just now';
+    else if (diff < 3600)  el.textContent = Math.floor(diff/60) + 'm ago';
+    else if (diff < 86400) el.textContent = d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    else el.textContent = d.toLocaleDateString([],{month:'short',day:'numeric'}) + ' ' +
+                          d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  });
+}
+
+function startVideoCall() {
+  var btn = document.getElementById('videoBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+  console.log('[VideoCall] Calling /api/video/start with chat:', chatId);
+  fetch('/api/video/start', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat: chatId}),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (btn) { btn.disabled = false; btn.textContent = '📹 Video Call'; }
+    if (d.error) { alert('Video call error: ' + d.error); return; }
+    var bar  = document.getElementById('videoCallBar');
+    var link = document.getElementById('videoCallLink');
+    if (bar && link) {
+      link.href = d.url;
+      link.textContent = '📹 Join video call: ' + d.url;
+      bar.style.display = 'block';
+    }
+    window.open(d.url, '_blank');
+  })
+  .catch(function(e){
+    if (btn) { btn.disabled = false; btn.textContent = '📹 Video Call'; }
+    alert('Could not start video call. Try again.');
+  });
+}
+
+// Enter key to send
+var inp = document.getElementById('messageInput');
+if (inp) {
+  inp.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  inp.focus();
+}
+</script>
+{% endblock %}

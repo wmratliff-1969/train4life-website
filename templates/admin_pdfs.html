@@ -1,0 +1,121 @@
+{% extends "admin_base.html" %}
+{% block title %}PDFs — TRAIN4LIFE Admin{% endblock %}
+{% block nav_pdfs %}active{% endblock %}
+
+{% block content %}
+<div style="max-width:900px; margin:0 auto; padding:2.5rem 1.5rem;">
+
+  <div style="margin-bottom:2rem;">
+    <h1 style="font-size:1.6rem; font-weight:800; margin:0 0 0.25rem;">PDF Library</h1>
+    <p style="color:#71717a; font-size:0.9rem; margin:0;">Manage downloadable resources on the website.</p>
+  </div>
+
+  {% if message %}
+  <div style="background:{% if 'Error' in message or 'error' in message %}#fef2f2; border:1px solid #fca5a5; color:#991b1b;{% else %}#f0fdf4; border:1px solid #86efac; color:#166534;{% endif %} border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.5rem; font-size:0.9rem; font-weight:600;">
+    {{ message }}
+  </div>
+  {% endif %}
+
+  <!-- Upload Form -->
+  <div style="background:#fff; border:1px solid #e4e4e7; border-radius:12px; padding:1.5rem; margin-bottom:2rem;">
+    <h2 style="font-size:1rem; font-weight:800; margin:0 0 1.25rem; text-transform:uppercase; letter-spacing:1px; color:#111;">Upload New PDF</h2>
+    <form method="POST" enctype="multipart/form-data" action="/admin/pdfs">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        <div>
+          <label style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.5px;">Title *</label>
+          <input type="text" name="title" required placeholder="e.g. Express 10-Min Workout Guide"
+                 style="width:100%; padding:0.6rem 0.8rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.9rem; font-family:inherit;">
+        </div>
+        <div>
+          <label style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.5px;">Category *</label>
+          <select name="category" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.9rem; font-family:inherit;">
+            <option value="express">Express</option>
+            <option value="bible">Bible Bootcamp</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:1rem;">
+        <label style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.5px;">Description</label>
+        <input type="text" name="description" placeholder="Short description shown on website (1-2 sentences)"
+               style="width:100%; padding:0.6rem 0.8rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.9rem; font-family:inherit;">
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
+        <div>
+          <label style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.5px;">PDF File *</label>
+          <input type="file" name="pdf_file" accept=".pdf" required
+                 style="width:100%; padding:0.5rem 0.8rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; font-family:inherit; background:#f9fafb;">
+        </div>
+        <div>
+          <label style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.5px;">Thumbnail (optional)</label>
+          <input type="file" name="thumbnail_file" accept="image/*"
+                 style="width:100%; padding:0.5rem 0.8rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; font-family:inherit; background:#f9fafb;">
+        </div>
+      </div>
+      <button type="submit" style="background:#CC0000; color:#fff; border:none; padding:0.65rem 1.5rem; border-radius:8px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit;">
+        Upload &amp; Publish
+      </button>
+    </form>
+  </div>
+
+  <!-- PDF List -->
+  <div style="background:#fff; border:1px solid #e4e4e7; border-radius:12px; overflow:hidden;">
+    <div style="padding:1rem 1.5rem; border-bottom:1px solid #f4f4f5; display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="font-size:1rem; font-weight:800; margin:0; text-transform:uppercase; letter-spacing:1px; color:#111;">Published PDFs</h2>
+      <span style="font-size:0.8rem; color:#71717a; font-weight:600;">{{ pdfs|length }} total</span>
+    </div>
+
+    {% if pdfs %}
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f9fafb; border-bottom:1px solid #e4e4e7;">
+          <th style="text-align:left; padding:0.65rem 1.5rem; font-size:0.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Title</th>
+          <th style="text-align:left; padding:0.65rem 1rem; font-size:0.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Category</th>
+          <th style="text-align:left; padding:0.65rem 1rem; font-size:0.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; width:200px;">Description</th>
+          <th style="padding:0.65rem 1rem; width:80px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pdf in pdfs %}
+        <tr style="border-bottom:1px solid #f4f4f5;">
+          <td style="padding:0.75rem 1.5rem;">
+            <a href="{{ pdf.url }}" target="_blank" style="font-size:0.9rem; font-weight:600; color:#111; text-decoration:none;"
+               onmouseover="this.style.color='#CC0000'" onmouseout="this.style.color='#111'">
+              {{ pdf.title }}
+            </a>
+          </td>
+          <td style="padding:0.75rem 1rem;">
+            {% if pdf.category == 'express' %}
+            <span style="font-size:0.72rem; font-weight:700; background:#fef2f2; color:#CC0000; border:1px solid #fca5a5; padding:2px 8px; border-radius:12px; text-transform:uppercase; letter-spacing:0.5px;">Express</span>
+            {% elif pdf.category == 'bible' %}
+            <span style="font-size:0.72rem; font-weight:700; background:#f5f3ff; color:#7c3aed; border:1px solid #c4b5fd; padding:2px 8px; border-radius:12px; text-transform:uppercase; letter-spacing:0.5px;">Bible</span>
+            {% else %}
+            <span style="font-size:0.72rem; font-weight:700; background:#f0fdf4; color:#166534; border:1px solid #86efac; padding:2px 8px; border-radius:12px; text-transform:uppercase; letter-spacing:0.5px;">Other</span>
+            {% endif %}
+          </td>
+          <td style="padding:0.75rem 1rem; font-size:0.82rem; color:#6b7280; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            {{ pdf.description or '—' }}
+          </td>
+          <td style="padding:0.75rem 1rem;">
+            <form method="POST" action="/admin/pdfs/delete" style="display:inline;" onsubmit="return confirm('Delete this PDF?')">
+              <input type="hidden" name="pdf_id" value="{{ pdf.id }}">
+              <button type="submit" style="background:none; border:1px solid #fca5a5; color:#ef4444; padding:4px 10px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer; font-family:inherit;"
+                      onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">
+                Delete
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding:2.5rem; text-align:center; color:#9ca3af;">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">📄</div>
+      <p style="font-size:0.9rem; font-weight:600;">No PDFs yet. Upload one above.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TRAIN4LIFE Admin{% endblock %}</title>
+  {% block head_extra %}{% endblock %}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f4f4f5; color: #111; min-height: 100vh; }
+
+    /* ── Top nav ── */
+    .a-nav {
+      background: #18181b; color: #fff;
+      display: flex; align-items: center; gap: 0; height: 60px;
+      padding: 0 24px; position: sticky; top: 0; z-index: 100;
+      border-bottom: 1px solid #27272a;
+    }
+    .a-nav-brand {
+      font-size: 0.9rem; font-weight: 900; letter-spacing: 2px;
+      color: #fff; text-decoration: none; margin-right: 32px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .a-nav-brand span { color: #CC0000; }
+    .a-nav-links { display: flex; align-items: center; gap: 2px; flex: 1; }
+    .a-nav-link {
+      font-size: 1rem; font-weight: 600; color: #a1a1aa;
+      text-decoration: none; padding: 8px 14px; border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .a-nav-link:hover { color: #fff; background: #27272a; }
+    .a-nav-link.active { color: #fff; background: #27272a; }
+    .a-nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .a-nav-logout {
+      font-size: 0.85rem; font-weight: 600; color: #71717a;
+      text-decoration: none; padding: 6px 12px; border-radius: 6px;
+      border: 1px solid #3f3f46; transition: all 0.15s;
+    }
+    .a-nav-logout:hover { color: #fff; border-color: #71717a; }
+
+    /* ── Page wrapper ── */
+    .a-page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    .a-page-wide { max-width: none; padding: 0; }
+
+    /* ── Page header ── */
+    .a-page-header { margin-bottom: 28px; }
+    .a-page-header h1 { font-size: 1.4rem; font-weight: 800; color: #111; }
+    .a-page-header p { font-size: 0.85rem; color: #71717a; margin-top: 4px; }
+    .a-breadcrumb { font-size: 0.75rem; color: #a1a1aa; margin-bottom: 8px; }
+    .a-breadcrumb a { color: #a1a1aa; text-decoration: none; }
+    .a-breadcrumb a:hover { color: #111; }
+
+    /* ── Stat cards ── */
+    .a-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .a-stat {
+      background: #fff; border: 1px solid #e4e4e7; border-radius: 12px;
+      padding: 20px 22px;
+    }
+    .a-stat-icon { font-size: 1.4rem; margin-bottom: 10px; }
+    .a-stat-val { font-size: 1.6rem; font-weight: 800; color: #111; line-height: 1; }
+    .a-stat-label { font-size: 0.75rem; color: #71717a; font-weight: 600; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Cards ── */
+    .a-card {
+      background: #fff; border: 1px solid #e4e4e7; border-radius: 12px;
+      padding: 24px;
+    }
+    .a-card + .a-card { margin-top: 16px; }
+    .a-card-head {
+      font-size: 0.7rem; font-weight: 700; color: #71717a;
+      letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 16px;
+    }
+
+    /* ── Grid nav cards ── */
+    .a-nav-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    .a-nav-card {
+      background: #fff; border: 1px solid #e4e4e7; border-radius: 12px;
+      padding: 22px; text-decoration: none; color: #111;
+      transition: border-color 0.15s, box-shadow 0.15s; display: block;
+    }
+    .a-nav-card:hover { border-color: #CC0000; box-shadow: 0 2px 12px rgba(204,0,0,0.08); }
+    .a-nav-card-icon { font-size: 1.6rem; margin-bottom: 10px; }
+    .a-nav-card-title { font-size: 0.95rem; font-weight: 800; color: #111; margin-bottom: 4px; }
+    .a-nav-card-desc { font-size: 0.78rem; color: #71717a; }
+    .a-nav-card.disabled { opacity: 0.45; pointer-events: none; }
+
+    /* ── Status badge ── */
+    .a-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+    .a-badge-live   { background: #fee2e2; color: #CC0000; }
+    .a-badge-soon   { background: #fff7ed; color: #c2410c; }
+    .a-badge-off    { background: #f4f4f5; color: #71717a; }
+    .a-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .a-dot-live   { background: #CC0000; }
+    .a-dot-soon   { background: #f97316; }
+    .a-dot-off    { background: #a1a1aa; }
+
+    /* ── Forms ── */
+    .a-form-group { margin-bottom: 20px; }
+    .a-label { display: block; font-size: 0.75rem; font-weight: 700; color: #374151; margin-bottom: 6px; letter-spacing: 0.3px; }
+    .a-hint { font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; }
+    .a-input {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 9px 12px; font-size: 0.9rem; color: #111; background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s; outline: none;
+    }
+    .a-input:focus { border-color: #CC0000; box-shadow: 0 0 0 3px rgba(204,0,0,0.08); }
+    .a-input-mono { font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 0.85rem; }
+
+    /* ── Radio status cards ── */
+    .a-radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .a-radio-card { flex: 1; min-width: 130px; cursor: pointer; }
+    .a-radio-card input { display: none; }
+    .a-radio-inner {
+      border: 2px solid #e4e4e7; border-radius: 10px; padding: 16px;
+      text-align: center; transition: border-color 0.15s, background 0.15s;
+      background: #fafafa;
+    }
+    .a-radio-card input:checked + .a-radio-inner { background: #fff; }
+    .a-radio-card.opt-off   input:checked + .a-radio-inner { border-color: #9ca3af; }
+    .a-radio-card.opt-soon  input:checked + .a-radio-inner { border-color: #f97316; background: #fff7ed; }
+    .a-radio-card.opt-live  input:checked + .a-radio-inner { border-color: #CC0000; background: #fff5f5; }
+    .a-radio-icon { font-size: 1.4rem; margin-bottom: 6px; }
+    .a-radio-title { font-size: 0.85rem; font-weight: 700; color: #111; }
+    .a-radio-desc  { font-size: 0.72rem; color: #9ca3af; margin-top: 2px; }
+
+    /* ── Timer-for cards (dark theme, larger) ── */
+    .a-radio-group.timer-group .a-radio-inner {
+      border: 2px solid #3f3f46; background: #18181b; padding: 22px 16px;
+      border-radius: 12px; transition: border-color 0.15s, background 0.15s;
+    }
+    .a-radio-group.timer-group .a-radio-title { color: #a1a1aa; }
+    .a-radio-group.timer-group .a-radio-desc  { color: #52525b; }
+    .a-radio-group.timer-group .a-radio-icon  { font-size: 1.6rem; }
+    /* Both — white/neutral selected */
+    .a-radio-card.opt-both input:checked + .a-radio-inner {
+      border-color: #e4e4e7; background: #27272a;
+    }
+    .a-radio-card.opt-both input:checked + .a-radio-inner .a-radio-title { color: #fff; }
+    .a-radio-card.opt-both input:checked + .a-radio-inner .a-radio-desc  { color: #a1a1aa; }
+    /* Express Only — red selected */
+    .a-radio-card.opt-express input:checked + .a-radio-inner {
+      border-color: #CC0000; background: #2d0a0a;
+      box-shadow: 0 0 0 1px #CC0000;
+    }
+    .a-radio-card.opt-express input:checked + .a-radio-inner .a-radio-title { color: #ff5555; }
+    .a-radio-card.opt-express input:checked + .a-radio-inner .a-radio-desc  { color: #cc5555; }
+    /* Bible Bootcamp Only — purple selected */
+    .a-radio-card.opt-bible input:checked + .a-radio-inner {
+      border-color: #9333ea; background: #1a0b2e;
+      box-shadow: 0 0 0 1px #9333ea;
+    }
+    .a-radio-card.opt-bible input:checked + .a-radio-inner .a-radio-title { color: #c084fc; }
+    .a-radio-card.opt-bible input:checked + .a-radio-inner .a-radio-desc  { color: #9b6ec4; }
+
+    /* ── Buttons ── */
+    .a-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; border: none; transition: filter 0.15s, opacity 0.15s; text-decoration: none;
+    }
+    .a-btn-primary { background: #CC0000; color: #fff; }
+    .a-btn-primary:hover { filter: brightness(1.1); }
+    .a-btn-ghost { background: transparent; color: #374151; border: 1px solid #d1d5db; }
+    .a-btn-ghost:hover { background: #f4f4f5; }
+    .a-btn-sm { padding: 6px 14px; font-size: 0.78rem; }
+
+    /* ── Alert ── */
+    .a-alert { padding: 12px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px; }
+    .a-alert-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .a-alert-error   { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+    /* ── Live status indicator inline ── */
+    .a-live-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: #fff; border: 1px solid #e4e4e7; border-radius: 10px;
+      padding: 12px 18px; margin-bottom: 28px;
+    }
+    .a-live-bar-label { font-size: 0.85rem; font-weight: 600; flex: 1; }
+    .a-live-bar a { font-size: 0.8rem; color: #CC0000; font-weight: 700; text-decoration: none; }
+    .a-live-bar a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<nav class="a-nav">
+  <a href="/admin/dashboard" class="a-nav-brand">TRAIN<span>4</span>LIFE <span style="color:#71717a;font-size:0.7rem;font-weight:400;letter-spacing:1px;margin-left:4px;">ADMIN</span></a>
+  <div class="a-nav-links">
+    <a href="/admin/dashboard" class="a-nav-link {% block nav_dashboard %}{% endblock %}">Dashboard</a>
+    <a href="/admin/live" class="a-nav-link {% block nav_live %}{% endblock %}">Live</a>
+    <a href="/admin/app-content" class="a-nav-link {% block nav_app %}{% endblock %}">App Content</a>
+    <a href="/admin/pdfs" class="a-nav-link {% block nav_pdfs %}{% endblock %}">PDFs</a>
+    <a href="/admin/guide" class="a-nav-link {% block nav_guide %}{% endblock %}">Guide</a>
+    <a href="/admin/dashboard" class="a-nav-link" style="opacity:0.4;cursor:default;" onclick="return false;">Customers</a>
+  </div>
+  <div class="a-nav-right">
+    <a href="/admin/logout" class="a-nav-logout">Sign out</a>
+  </div>
+</nav>
+
+{% block body %}{% endblock %}
+
+</body>
+</html>

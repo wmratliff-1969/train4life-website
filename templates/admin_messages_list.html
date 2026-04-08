@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Messages — Admin{% endblock %}
+
+{% block head_extra %}
+<style>
+  .alist-wrap { max-width: 600px; margin: 80px auto 40px; padding: 0 1.5rem; }
+  .alist-heading {
+    font-size: 1.3rem; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 0.4rem;
+  }
+  .alist-breadcrumb {
+    font-size: 0.78rem; color: rgba(255,255,255,0.35); margin-bottom: 1.5rem;
+  }
+  .alist-breadcrumb a { color: #22b9b0; text-decoration: none; }
+  .section-label {
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.15em;
+    text-transform: uppercase; color: rgba(255,255,255,0.3);
+    margin: 1.2rem 0 0.5rem;
+  }
+  .alist-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.9rem 1.1rem; background: #1e1e1e; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.07); margin-bottom: 0.55rem;
+    text-decoration: none; color: #fff;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .alist-row:hover { background: #252525; border-color: rgba(34,185,176,0.3); }
+  .alist-icon {
+    font-size: 1.4rem; flex-shrink: 0; width: 40px; text-align: center;
+  }
+  .alist-avatar {
+    width: 40px; height: 40px; border-radius: 50; flex-shrink: 0;
+    background: linear-gradient(135deg,#22b9b0,#2f8c78);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 800; color: #fff; border-radius: 50%;
+  }
+  .alist-info { flex: 1; min-width: 0; }
+  .alist-name    { font-size: 0.92rem; font-weight: 700; }
+  .alist-preview { font-size: 0.75rem; color: rgba(255,255,255,0.38); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alist-badge {
+    background: #e53e3e; color: #fff; font-size: 10px; font-weight: 800;
+    min-width: 20px; height: 20px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 4px; flex-shrink: 0;
+  }
+  .alist-arrow { color: rgba(255,255,255,0.22); font-size: 1.1rem; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="alist-wrap">
+
+  <div class="alist-heading">Messages</div>
+  <div class="alist-breadcrumb">
+    <a href="/admin/dashboard">Dashboard</a> / Messages
+  </div>
+
+  <div class="section-label">Group Chats</div>
+
+  <a href="/admin/messages/announcements" class="alist-row">
+    <div class="alist-icon">📢</div>
+    <div class="alist-info">
+      <div class="alist-name">Announcements</div>
+      <div class="alist-preview">Post to all members</div>
+    </div>
+    <div class="alist-arrow">›</div>
+  </a>
+
+  <a href="/admin/messages/express" class="alist-row">
+    <div class="alist-icon">⚡</div>
+    <div class="alist-info">
+      <div class="alist-name">Express Community</div>
+      <div class="alist-preview">Express group chat</div>
+    </div>
+    <div class="alist-arrow">›</div>
+  </a>
+
+  <a href="/admin/messages/bible" class="alist-row">
+    <div class="alist-icon">📖</div>
+    <div class="alist-info">
+      <div class="alist-name">Bible Bootcamp</div>
+      <div class="alist-preview">Bible Bootcamp group chat</div>
+    </div>
+    <div class="alist-arrow">›</div>
+  </a>
+
+  <div class="section-label">Direct Messages</div>
+
+  {% if dm_convos %}
+    {% for c in dm_convos %}
+    <a href="/admin/messages/dm/{{ c.email }}" class="alist-row">
+      <div class="alist-avatar">{{ c.name[0]|upper }}</div>
+      <div class="alist-info">
+        <div class="alist-name">{{ c.name }}</div>
+        <div class="alist-preview">{{ c.last_message }}</div>
+      </div>
+      {% if c.unread > 0 %}<div class="alist-badge">{{ c.unread }}</div>{% endif %}
+      <div class="alist-arrow">›</div>
+    </a>
+    {% endfor %}
+  {% else %}
+    <div style="color:rgba(255,255,255,0.28);font-size:0.85rem;padding:0.8rem 0;">
+      No direct messages yet.
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
