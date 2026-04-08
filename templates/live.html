@@ -216,16 +216,24 @@
     text-transform: uppercase; margin-right: 0.4rem; color: rgba(255,255,255,0.2);
   }
 
-  /* Theater mode — full-width layout, chat stacks below */
-  .live-layout { transition: max-width 0.3s ease, flex-direction 0.3s ease; }
-  .live-chat-panel { transition: width 0.3s ease, height 0.3s ease; }
-  .live-page { transition: padding 0.3s ease; }
-
-  body.vm-theater .live-page { max-width: 100%; align-items: stretch; padding-left: 0; padding-right: 0; }
-  body.vm-theater .live-header { padding: 0 1.5rem; }
-  body.vm-theater .live-layout { max-width: 100%; flex-direction: column; }
-  body.vm-theater .live-chat-panel { width: 100%; height: 280px; }
-  body.vm-theater .notify-section { max-width: 100%; padding: 0 1.5rem; }
+  /* Theater mode — fixed 90vw overlay; page layout beneath is untouched. */
+  body.vm-theater::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 400;
+    pointer-events: none;
+  }
+  body.vm-theater #live-player-wrap {
+    position: fixed;
+    top: 0;
+    left: 5vw;
+    width: 90vw;
+    z-index: 401;
+    background: #000;
+    border-radius: 0 0 8px 8px;
+  }
 
   /* Fullscreen wrapper */
   #live-player-wrap { position: relative; }
@@ -244,8 +252,8 @@
   }
 
   @media (max-width: 800px) {
-    body.vm-theater .live-layout { flex-direction: column; }
-    body.vm-theater .live-chat-panel { width: 100%; }
+    .live-layout { flex-direction: column; }
+    .live-chat-panel { width: 100%; }
   }
 </style>
 
@@ -454,7 +462,6 @@ function handleNotify(e){e.preventDefault();document.getElementById('notifyForm'
     currentMode = mode;
     if (mode === 'theater') {
       document.body.classList.add('vm-theater');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (mode === 'fullscreen') {
       var wrap = document.getElementById('live-player-wrap');
       if (wrap) { var req = wrap.requestFullscreen || wrap.webkitRequestFullscreen; if (req) req.call(wrap); }
@@ -467,6 +474,10 @@ function handleNotify(e){e.preventDefault();document.getElementById('notifyForm'
   }
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
+  // ESC exits theater mode (browser handles ESC for fullscreen natively)
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && currentMode === 'theater') setViewMode('default');
+  });
 })();
 
 // ── SocketIO: WebRTC viewer + live chat ──

@@ -93,16 +93,26 @@
     flex: 1; aspect-ratio: unset; border-radius: 0; margin-bottom: 0;
   }
 
-  /* Theater — break the preview out of the narrow .a-page column to 90vw.
-     margin-left:50% moves the element's left edge to the parent's midpoint;
-     translateX(-50%) pulls it back by half its own width → viewport-centered. */
-  #preview-player-wrap {
-    transition: width 0.35s ease, margin-left 0.35s ease, transform 0.35s ease;
+  /* Theater — fixed 90vw overlay. The player floats above the page so
+     nothing below (controls, form) moves at all. ESC or Default exits. */
+  body.vm-theater-admin::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    top: 60px;           /* clear the 60px sticky admin nav */
+    background: rgba(0,0,0,0.82);
+    z-index: 101;
+    pointer-events: none;
   }
   body.vm-theater-admin #preview-player-wrap {
+    position: fixed;
+    top: 60px;
+    left: 5vw;
     width: 90vw;
-    margin-left: 50%;
-    transform: translateX(-50%);
+    z-index: 102;
+    background: #000;
+    border-radius: 10px;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.95);
   }
 </style>
 {% endblock %}
@@ -461,6 +471,10 @@
   }
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
+  // ESC exits theater (browser already handles ESC for fullscreen)
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && currentMode === 'theater') setViewMode('default');
+  });
 })();
 </script>
 
