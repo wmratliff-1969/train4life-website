@@ -743,12 +743,19 @@ def health():
 @app.route('/api/live-status')
 def api_live_status():
     status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    # If a WebRTC broadcaster is active in memory, always report live
+    # regardless of what the settings file says (guards against race
+    # conditions or session check failures in broadcaster_ready handler)
+    webrtc_active = (_sio_broadcaster is not None)
+    if webrtc_active:
+        status = 'live'
     response = jsonify({
         'status': status,
         'countdown_to': countdown_to,
         'message': message,
         'timer_for': timer_for,
         'stream_url': stream_url,
+        'webrtc_active': webrtc_active,
     })
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
