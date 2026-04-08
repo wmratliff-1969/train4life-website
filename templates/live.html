@@ -480,7 +480,9 @@ function handleNotify(e){e.preventDefault();document.getElementById('notifyForm'
   document.head.appendChild(s);
 
   function initSocket(){
-    var socket=io();
+    // Force WebSocket transport — WKWebView (iOS) struggles with the polling→WebSocket
+    // upgrade that Socket.IO uses by default. Skipping polling entirely fixes it.
+    var socket=io({transports:['websocket'],upgrade:false});
     var pc=null, jeffSid=null;
 
     socket.on('connect',function(){ socket.emit('join_live'); });

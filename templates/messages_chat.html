@@ -475,7 +475,7 @@ if (inp) {
   document.head.appendChild(sioScript);
 
   function initSocket() {
-    var socket = io();
+    var socket = io({transports:['websocket'],upgrade:false});
 
     // ── Track call state ──────────────────────────────────────────────
     var callState    = 'idle';   // idle | calling | receiving | active

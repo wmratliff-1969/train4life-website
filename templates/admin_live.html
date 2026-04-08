@@ -288,7 +288,7 @@
   document.head.appendChild(s);
 
   function initBroadcaster(){
-    var socket=io();
+    var socket=io({transports:['websocket'],upgrade:false});
     var localStream=null, mediaRecorder=null, recordedChunks=[];
     var peerConns={};  // sid -> RTCPeerConnection
     var isLive=false;
