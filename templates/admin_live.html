@@ -93,40 +93,41 @@
     flex: 1; aspect-ratio: unset; border-radius: 0; margin-bottom: 0;
   }
 
-  /* Theater — fixed 90vw overlay. The player (+ controls inside it) floats
-     above the page; nothing outside the wrap moves at all. ESC exits. */
-  body.vm-theater-admin::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    top: 60px;           /* clear the 60px sticky admin nav */
-    background: rgba(0,0,0,0.82);
-    z-index: 101;
-    pointer-events: none;
+  /* Theater — fixed 90vw overlay. ESC or Default button exits.
+     The whole .webrtc-card is made invisible so its dark background
+     and border don't show through; #preview-player-wrap (a child)
+     overrides back to visible and floats as the fixed overlay. */
+  body.vm-theater-admin .webrtc-card {
+    visibility: hidden;   /* hides card chrome: bg, border, header */
   }
   body.vm-theater-admin #preview-player-wrap {
+    visibility: visible;  /* child overrides parent hidden — still shows */
     position: fixed;
-    top: 60px;
+    top: 60px;            /* just below the 60px sticky admin nav */
     left: 5vw;
     width: 90vw;
-    z-index: 102;
+    z-index: 200;
     background: #000;
     border-radius: 10px;
     box-shadow: 0 20px 80px rgba(0,0,0,0.95);
   }
-  /* Controls footer inside the theater overlay */
+  /* Controls footer inside the fixed overlay */
   body.vm-theater-admin .webrtc-controls {
     padding: 0.75rem 1rem;
     background: #111;
     border-top: 1px solid rgba(255,255,255,0.07);
     border-radius: 0 0 10px 10px;
   }
-  body.vm-theater-admin #webrtc-status {
-    display: none; /* status text hidden in theater; controls have enough info */
-  }
-  /* Card header becomes orphaned in theater (wrap is fixed); hide it */
-  body.vm-theater-admin .webrtc-card-head {
-    visibility: hidden;
+  body.vm-theater-admin #webrtc-status { display: none; }
+  /* Dim the rest of the page behind the overlay */
+  body.vm-theater-admin::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    top: 60px;
+    background: rgba(0,0,0,0.82);
+    z-index: 199;
+    pointer-events: none;
   }
 </style>
 {% endblock %}
