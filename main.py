@@ -2367,6 +2367,29 @@ def admin_live():
                            broadcast_token=_sio_broadcast_token)
 
 
+@app.route('/api/admin/broadcast-token', methods=['POST', 'OPTIONS'])
+def api_broadcast_token():
+    """Video builder endpoint — issues a fresh WebRTC broadcast token.
+    Authorization: Bearer <ADMIN_PASSWORD>
+    Returns: { token: '...' }
+    """
+    if request.method == 'OPTIONS':
+        resp = jsonify({})
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        return resp
+    global _sio_broadcast_token
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer ') or auth[7:] != ADMIN_PASSWORD:
+        return jsonify({'error': 'Unauthorized'}), 401
+    import secrets
+    _sio_broadcast_token = secrets.token_hex(24)
+    resp = jsonify({'token': _sio_broadcast_token})
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+
 @app.route('/api/admin/set-live', methods=['POST'])
 def api_admin_set_live():
     """iOS admin endpoint — POST JSON with Authorization: Bearer <password>."""
