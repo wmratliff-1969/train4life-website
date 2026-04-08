@@ -785,6 +785,23 @@ def api_live_status():
     return response
 
 
+@app.route('/api/admin/set-timer-for', methods=['POST'])
+def api_set_timer_for():
+    """Session-authenticated endpoint: update only timer_for in live settings.
+    Called by the admin_live page when a Show Timer For radio button is clicked."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    tf = data.get('timer_for', 'both')
+    if tf not in ('both', 'express', 'bible'):
+        tf = 'both'
+    # Merge into current settings so no other field is overwritten
+    settings = _load_live_settings()
+    settings['timer_for'] = tf
+    _save_live_settings(settings)
+    return jsonify({'ok': True, 'timer_for': tf})
+
+
 @app.route('/live')
 def live():
     status, countdown_to, message, timer_for, stream_url = _get_live_vars()

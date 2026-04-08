@@ -499,6 +499,32 @@
     if (e.key === 'Escape' && currentMode === 'theater') setViewMode('default');
   });
 })();
+
+// ── Show Timer For: auto-save on radio click ──
+(function(){
+  document.querySelectorAll('input[name="timer_for"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      var val = this.value;
+      fetch('/api/admin/set-timer-for', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timer_for: val })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          // Brief visual feedback on the selected label
+          var label = radio.closest('label');
+          if (label) {
+            label.style.outline = '2px solid #4ade80';
+            setTimeout(function() { label.style.outline = ''; }, 900);
+          }
+        }
+      })
+      .catch(function(err) { console.warn('timer_for save error:', err); });
+    });
+  });
+})();
 </script>
 
 {% endblock %}
