@@ -1804,7 +1804,7 @@ def messages_chat(chat_id):
     }
     title, subtitle = titles[chat_id]
     return render_template('messages_chat.html',
-        chat_id=chat_id, title=title, subtitle=subtitle,
+        chat_id=actual_id, title=title, subtitle=subtitle,
         messages=msgs, is_readonly=is_readonly,
         my_email=email, error=error,
         is_dm=(chat_id == 'dm'),
