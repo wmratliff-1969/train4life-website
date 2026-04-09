@@ -560,6 +560,8 @@ if (inp) {
   document.head.appendChild(sioScript);
 
   function initSocket() {
+    // Tell the global admin toast to stand down — this page handles calls directly
+    window._callHandledByPage = true;
     var socket = io({transports:['websocket'],upgrade:false});
 
     // ── Track call state ──────────────────────────────────────────────
@@ -571,12 +573,25 @@ if (inp) {
     socket.on('connect', function() {
       socket.emit('join_chat',      { chat_id: chatId });
       socket.emit('join_call_room', { chat_id: chatId });
-      // Auto-initiate call when navigated from the Online Now panel (?call=1)
-      if (new URLSearchParams(window.location.search).get('call') === '1') {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('call') === '1') {
+        // Navigated from Online Now panel — Jeff is initiating the call
         history.replaceState(null, '', window.location.pathname);
         setTimeout(function() {
           var vb = document.getElementById('videoBtn');
           if (vb && callState === 'idle') vb.click();
+        }, 400);
+      } else if (params.get('call_from')) {
+        // Jeff accepted a member's incoming call — auto-emit call_accept
+        var callerSid = params.get('call_from');
+        history.replaceState(null, '', window.location.pathname);
+        setTimeout(function() {
+          if (callState !== 'idle') return;
+          callState = 'active';
+          remoteSid = callerSid;
+          socket.emit('call_accept', { to: callerSid });
+          showOverlay('active');
+          setCallStatus('Connecting…');
         }, 400);
       }
     });
@@ -605,7 +620,8 @@ if (inp) {
     // ── Incoming call (member calls Jeff) ────────────────────────────
     socket.on('call_invite', function(data) {
       if (callState !== 'idle') {
-        socket.emit('call_decline', { to: data.from });
+        // If we're the caller, our own invite bounced back — ignore silently
+        if (callState !== 'calling') socket.emit('call_decline', { to: data.from });
         return;
       }
       callState = 'receiving';

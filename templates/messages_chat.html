@@ -517,8 +517,8 @@ if (inp) {
     // ── Incoming call ─────────────────────────────────────────────────
     socket.on('call_invite', function(data) {
       if (callState !== 'idle') {
-        // Already busy — auto-decline
-        socket.emit('call_decline', { to: data.from });
+        // If we're the caller, our own invite bounced back — ignore silently
+        if (callState !== 'calling') socket.emit('call_decline', { to: data.from });
         return;
       }
       callState = 'receiving';

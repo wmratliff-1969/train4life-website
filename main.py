@@ -3136,11 +3136,11 @@ if _SIO_OK and socketio:
         chat_id     = (data.get('chat_id') or '').strip()
         caller_name = (session.get('user_name') or session.get('user_email') or 'Someone').split()[0]
         if chat_id:
-            socketio.emit('call_invite', {
-                'from':        request.sid,
-                'caller_name': caller_name,
-                'chat_id':     chat_id,
-            }, to=f'call:{chat_id}', include_self=False)
+            payload = {'from': request.sid, 'caller_name': caller_name, 'chat_id': chat_id}
+            socketio.emit('call_invite', payload, to=f'call:{chat_id}', include_self=False)
+            # When a member calls, also ping the admin's global toast (any admin page)
+            if not session.get('is_admin'):
+                socketio.emit('call_invite', payload, to='call:admin')
 
     @socketio.on('call_accept')
     def _sio_call_accept(data):
@@ -3235,13 +3235,15 @@ def api_online_users():
         socket_users = [u for u in _online_users.values() if u['last_seen'] > socket_cutoff]
         http_users   = [{'email': e, 'name': v['name']}
                         for e, v in _http_online.items() if v['last_seen'] > http_cutoff]
+    # Never show the admin's own email(s) in the Online Now panel
+    own_email = (session.get('user_email') or '').lower()
     seen, unique = set(), []
     for u in socket_users:
-        if u['email'] not in seen:
+        if u['email'] not in seen and u['email'].lower() != own_email:
             seen.add(u['email'])
             unique.append({'email': u['email'], 'name': u['name']})
     for u in http_users:
-        if u['email'] not in seen:
+        if u['email'] not in seen and u['email'].lower() != own_email:
             seen.add(u['email'])
             unique.append(u)
     return jsonify({'online': unique})

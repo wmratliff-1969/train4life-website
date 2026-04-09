@@ -1574,5 +1574,60 @@
   })();
   </script>
   {% endif %}
+
+  {# ── Admin global incoming-call toast (Jeff) — shows when a member calls from any page ── #}
+  {% if session.get('is_admin') %}
+  <div id="global-call-toast-admin" style="
+    display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    z-index:99999; background:#1e1e1e; border:1px solid rgba(34,185,176,0.5);
+    border-radius:16px; padding:1rem 1.4rem; box-shadow:0 8px 32px rgba(0,0,0,0.7);
+    min-width:280px; max-width:90vw; text-align:center;
+    animation:gctIn 0.25s ease;">
+    <style>@keyframes gctIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
+    <div style="font-size:0.75rem;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#22b9b0;margin-bottom:0.5rem;">📹 Incoming Video Call</div>
+    <div id="gct-admin-caller" style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:0.9rem;">Someone</div>
+    <div style="display:flex;gap:0.7rem;">
+      <button id="gct-admin-accept" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Accept</button>
+      <button id="gct-admin-decline" style="flex:1;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✖ Decline</button>
+    </div>
+  </div>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+  (function() {
+    var adminPendingFrom   = null;
+    var adminPendingChatId = null;
+    var socket = io();
+
+    socket.on('connect', function() {
+      // Join the admin call room so members' call_invite events reach Jeff globally
+      socket.emit('join_call_room', { chat_id: 'admin' });
+    });
+
+    socket.on('call_invite', function(data) {
+      // Stand down if this page already has a dedicated call UI
+      if (window._callHandledByPage) return;
+      adminPendingFrom   = data.from;
+      adminPendingChatId = data.chat_id || '';
+      var el = document.getElementById('gct-admin-caller');
+      if (el) el.textContent = data.caller_name || 'Someone';
+      document.getElementById('global-call-toast-admin').style.display = 'block';
+    });
+
+    document.getElementById('gct-admin-accept').addEventListener('click', function() {
+      document.getElementById('global-call-toast-admin').style.display = 'none';
+      // Navigate to the admin DM page and auto-accept there
+      var memberEmail = adminPendingChatId.replace(/^dm:/, '');
+      window.location.href = '/admin/messages/dm/' + encodeURIComponent(memberEmail) +
+        '?call_from=' + encodeURIComponent(adminPendingFrom || '');
+    });
+
+    document.getElementById('gct-admin-decline').addEventListener('click', function() {
+      document.getElementById('global-call-toast-admin').style.display = 'none';
+      if (adminPendingFrom) socket.emit('call_decline', { to: adminPendingFrom });
+      adminPendingFrom = null; adminPendingChatId = null;
+    });
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>
