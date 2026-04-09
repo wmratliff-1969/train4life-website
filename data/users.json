@@ -20,5 +20,12 @@
     "password": "3a95fbcc0358bd08e7fc4e471238e757491825dd1e4cd97ece1ef5b74888e27c",
     "plan": "express",
     "created_at": "2026-04-05T00:33:14.613638"
+  },
+  "jeff@train4life.life": {
+    "name": "Jeff",
+    "email": "jeff@train4life.life",
+    "password": "0dbcea4250c3c11ffb48e176db70c94d0f51cfc1843b35c83a0bb0e292802830",
+    "plan": "monthly",
+    "created_at": "2026-04-09T00:00:00.000000"
   }
 }
