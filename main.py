@@ -1508,23 +1508,71 @@ def api_content():
     })
 
 
-# ── LIVE SETTINGS (in-memory primary, file backup) ────────────────────────────
-# Railway's filesystem is ephemeral — resets on every deploy. Using an
-# in-memory dict as the authoritative store so saves survive across requests
-# within a running process. File write is best-effort for debugging only.
+# ── LIVE SETTINGS (Upstash Redis primary, in-memory cache, file fallback) ─────
+# Render's filesystem is ephemeral — resets on every deploy. Settings are stored
+# in Upstash Redis (free hosted Redis with a REST API, no extra packages needed).
+# In-memory dict acts as a per-request cache so we don't hit Redis on every call.
+# Falls back to the committed data/live-settings.json if Upstash is not configured.
 _live_settings_path = os.path.join(_base, 'data', 'live-settings.json')
-_live_settings_mem = None   # None = not yet initialised
+_live_settings_mem = None   # None = not yet initialised (cache)
+
+_UPSTASH_URL   = os.environ.get('UPSTASH_REDIS_REST_URL', '').rstrip('/')
+_UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN', '')
+_UPSTASH_KEY   = 'live_settings'
+
+def _upstash_get():
+    """Fetch live_settings JSON from Upstash. Returns dict or None on error/missing."""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        return None
+    try:
+        r = _http.get(
+            f'{_UPSTASH_URL}/get/{_UPSTASH_KEY}',
+            headers={'Authorization': f'Bearer {_UPSTASH_TOKEN}'},
+            timeout=3,
+        )
+        result = r.json().get('result')
+        if result:
+            return json.loads(result)
+    except Exception as e:
+        print(f'[UPSTASH] get error: {e}', flush=True)
+    return None
+
+def _upstash_set(data):
+    """Persist live_settings JSON to Upstash. Fire-and-forget; failures are non-fatal."""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        return
+    try:
+        encoded = json.dumps(data, separators=(',', ':'))
+        r = _http.post(
+            f'{_UPSTASH_URL}/set/{_UPSTASH_KEY}',
+            headers={
+                'Authorization': f'Bearer {_UPSTASH_TOKEN}',
+                'Content-Type': 'text/plain',
+            },
+            data=encoded,
+            timeout=3,
+        )
+        print(f'[UPSTASH] set → {r.status_code}', flush=True)
+    except Exception as e:
+        print(f'[UPSTASH] set error: {e}', flush=True)
 
 def _load_live_settings():
-    """Return current live settings. Memory is authoritative; file is fallback on first load."""
+    """Return current live settings. In-memory cache → Upstash → file seed."""
     global _live_settings_mem
     if _live_settings_mem is not None:
         return dict(_live_settings_mem)
-    # First call this process: try to read from file (present on fresh deploy)
+    # First call this process: try Upstash first (survives restarts)
+    from_redis = _upstash_get()
+    if from_redis is not None:
+        print(f'[UPSTASH] loaded settings from Redis: {from_redis}', flush=True)
+        _live_settings_mem = from_redis
+        return dict(_live_settings_mem)
+    # Fall back to committed seed file
     if os.path.exists(_live_settings_path):
         try:
             with open(_live_settings_path) as f:
                 _live_settings_mem = json.load(f)
+                print(f'[SETTINGS] loaded from seed file', flush=True)
                 return dict(_live_settings_mem)
         except Exception:
             pass
@@ -1533,13 +1581,15 @@ def _load_live_settings():
 
 def _save_live_settings(data):
     global _live_settings_mem
-    _live_settings_mem = dict(data)          # always succeeds
+    _live_settings_mem = dict(data)   # update cache immediately
+    _upstash_set(data)                # persist to Redis (survives restarts)
+    # Also write file as last-resort backup
     os.makedirs(os.path.dirname(_live_settings_path), exist_ok=True)
     try:
         with open(_live_settings_path, 'w') as f:
             json.dump(data, f, indent=2)
     except Exception:
-        pass                                  # memory is the authority; file failure is non-fatal
+        pass
 
 
 # ── OneSignal push notifications ───────────────────────────────────────────────
@@ -1587,7 +1637,6 @@ def _send_onesignal_push(status):
 def _get_live_vars():
     """Return current live status vars — saved settings override env vars."""
     settings = _load_live_settings()
-    print(f'[DEBUG] _get_live_vars: mem_id={id(_live_settings_mem)} settings={settings}', flush=True)
     # Use 'in' membership so saved empty-string doesn't silently fall through
     status = settings['status'] if 'status' in settings else os.environ.get('LIVE_STATUS', 'off')
     if status not in ('off', 'countdown', 'live'):
