@@ -465,6 +465,8 @@ if (inp) {
   document.head.appendChild(sioScript);
 
   function initSocket() {
+    // Tell base.html's global toast handler to stand down — this page handles calls
+    window._callHandledByPage = true;
     var socket = io({transports:['websocket'],upgrade:false});
 
     // ── Track call state ──────────────────────────────────────────────

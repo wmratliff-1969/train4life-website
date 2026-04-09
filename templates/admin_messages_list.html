@@ -17,6 +17,28 @@
     text-transform: uppercase; color: rgba(255,255,255,0.3);
     margin: 1.2rem 0 0.5rem;
   }
+  /* Online members panel */
+  #online-section { margin-bottom: 0.5rem; }
+  .online-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.75rem 1.1rem; background: rgba(34,185,176,0.07);
+    border-radius: 10px; border: 1px solid rgba(34,185,176,0.18);
+    margin-bottom: 0.45rem;
+  }
+  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #22b9b0; flex-shrink: 0; box-shadow: 0 0 6px #22b9b0; }
+  .online-name { flex: 1; font-size: 0.92rem; font-weight: 700; }
+  .online-email { font-size: 0.72rem; color: rgba(255,255,255,0.38); }
+  .btn-call-out {
+    background: #e53e3e; color: #fff; border: none;
+    border-radius: 8px; padding: 0.45rem 0.9rem;
+    font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn-call-out:hover  { background: #c53030; }
+  .btn-call-out:active { transform: scale(0.95); }
+  .btn-call-out:disabled { background: rgba(229,62,62,0.3); cursor: default; }
+  #online-empty { font-size: 0.82rem; color: rgba(255,255,255,0.28); padding: 0.4rem 0; }
   .alist-row {
     display: flex; align-items: center; gap: 1rem;
     padding: 0.9rem 1.1rem; background: #1e1e1e; border-radius: 10px;
@@ -29,10 +51,10 @@
     font-size: 1.4rem; flex-shrink: 0; width: 40px; text-align: center;
   }
   .alist-avatar {
-    width: 40px; height: 40px; border-radius: 50; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
     background: linear-gradient(135deg,#22b9b0,#2f8c78);
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.9rem; font-weight: 800; color: #fff; border-radius: 50%;
+    font-size: 0.9rem; font-weight: 800; color: #fff;
   }
   .alist-info { flex: 1; min-width: 0; }
   .alist-name    { font-size: 0.92rem; font-weight: 700; }
@@ -53,6 +75,12 @@
   <div class="alist-heading">Messages</div>
   <div class="alist-breadcrumb">
     <a href="/admin/dashboard">Dashboard</a> / Messages
+  </div>
+
+  <div class="section-label">Online Now</div>
+  <div id="online-section">
+    <div id="online-list"></div>
+    <div id="online-empty">No members online right now.</div>
   </div>
 
   <div class="section-label">Group Chats</div>
@@ -125,4 +153,73 @@
   {% endif %}
 
 </div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+(function() {
+  var socket = io();
+  var callingEmail = null;
+
+  socket.on('call_decline', function(data) {
+    if (data.to_email === callingEmail) {
+      callingEmail = null;
+      var btn = document.querySelector('.btn-call-out[data-email="' + data.to_email + '"]');
+      if (btn) { btn.disabled = false; btn.textContent = '📹 Call'; }
+    }
+  });
+
+  socket.on('call_end', function() {
+    callingEmail = null;
+    document.querySelectorAll('.btn-call-out').forEach(function(b) {
+      b.disabled = false; b.textContent = '📹 Call';
+    });
+  });
+
+  function callMember(email, name, btn) {
+    if (callingEmail) return;
+    callingEmail = email;
+    btn.disabled = true;
+    btn.textContent = 'Calling…';
+    socket.emit('call_invite', { to_email: email, from: 'Jeff' });
+  }
+
+  function renderOnline(members) {
+    var list = document.getElementById('online-list');
+    var empty = document.getElementById('online-empty');
+    if (!members || members.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+    list.innerHTML = members.map(function(m) {
+      return '<div class="online-row">' +
+        '<div class="online-dot"></div>' +
+        '<div class="online-name">' + m.name +
+          '<div class="online-email">' + m.email + '</div>' +
+        '</div>' +
+        '<button class="btn-call-out" data-email="' + m.email + '" data-name="' + m.name + '">📹 Call</button>' +
+      '</div>';
+    }).join('');
+    list.querySelectorAll('.btn-call-out').forEach(function(btn) {
+      if (btn.dataset.email === callingEmail) {
+        btn.disabled = true; btn.textContent = 'Calling…';
+      }
+      btn.addEventListener('click', function() {
+        callMember(btn.dataset.email, btn.dataset.name, btn);
+      });
+    });
+  }
+
+  function pollOnlineUsers() {
+    fetch('/api/online-users')
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderOnline(data.online || []); })
+      .catch(function() {});
+  }
+
+  pollOnlineUsers();
+  setInterval(pollOnlineUsers, 5000);
+})();
+</script>
 {% endblock %}

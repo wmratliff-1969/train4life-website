@@ -1503,5 +1503,63 @@
   })();
   </script>
   {% endif %}
+
+  {# ── Online presence + global incoming-call toast (members only) ── #}
+  {% if session.get('logged_in') and not session.get('is_admin') %}
+  <div id="global-call-toast" style="
+    display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    z-index:99999; background:#1e1e1e; border:1px solid rgba(229,62,62,0.5);
+    border-radius:16px; padding:1rem 1.4rem; box-shadow:0 8px 32px rgba(0,0,0,0.7);
+    min-width:280px; max-width:90vw; text-align:center;
+    animation:gctIn 0.25s ease;">
+    <style>@keyframes gctIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
+    <div style="font-size:0.75rem;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#f87171;margin-bottom:0.5rem;">📹 Incoming Video Call</div>
+    <div id="gct-caller" style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:0.9rem;">Jeff</div>
+    <div style="display:flex;gap:0.7rem;">
+      <button id="gct-accept" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Accept</button>
+      <button id="gct-decline" style="flex:1;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✖ Decline</button>
+    </div>
+  </div>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+  (function() {
+    var memberEmail = {{ session.get('user_email', '')|tojson }};
+    var pendingFrom = null;
+    var socket = io();
+
+    socket.on('connect', function() {
+      socket.emit('user_online');
+      // Join personal DM call room so Jeff can reach this member from any page
+      socket.emit('join_call_room', { chat_id: 'dm:' + memberEmail });
+    });
+
+    // Heartbeat every 30 s
+    setInterval(function() { socket.emit('user_heartbeat'); }, 30000);
+
+    // Incoming call from Jeff
+    socket.on('call_invite', function(data) {
+      // If already on messages/dm page the page-level handler takes over
+      if (window._callHandledByPage) return;
+      pendingFrom = data.from;
+      var toast = document.getElementById('global-call-toast');
+      var caller = document.getElementById('gct-caller');
+      if (caller) caller.textContent = data.caller_name || 'Jeff';
+      if (toast) toast.style.display = 'block';
+    });
+
+    document.getElementById('gct-accept').addEventListener('click', function() {
+      document.getElementById('global-call-toast').style.display = 'none';
+      // Navigate to DM page which has the full call UI
+      window.location.href = '/messages/dm';
+    });
+
+    document.getElementById('gct-decline').addEventListener('click', function() {
+      document.getElementById('global-call-toast').style.display = 'none';
+      if (pendingFrom) socket.emit('call_decline', { to: pendingFrom });
+      pendingFrom = null;
+    });
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>

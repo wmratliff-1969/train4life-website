@@ -38,6 +38,7 @@ _sio_lock             = threading.Lock()
 _sio_broadcaster      = None   # socket-id of Jeff's broadcasting session
 _sio_viewers          = {}     # sid -> {email, name}
 _sio_broadcast_token  = None   # short-lived token issued at /admin/live page load
+_online_users         = {}     # sid -> {email, name, last_seen} — members online right now
 
 import markupsafe
 @app.template_filter('linkify')
@@ -2971,13 +2972,14 @@ if _SIO_OK and socketio:
 
     @socketio.on('disconnect')
     def _sio_disconnect():
-        global _sio_broadcaster, _sio_viewers
+        global _sio_broadcaster, _sio_viewers, _online_users
         sid = request.sid
         with _sio_lock:
             is_broadcaster = (sid == _sio_broadcaster)
             if is_broadcaster:
                 _sio_broadcaster = None
             _sio_viewers.pop(sid, None)
+            _online_users.pop(sid, None)
             count = len(_sio_viewers)
         if is_broadcaster:
             try:
@@ -3180,6 +3182,46 @@ if _SIO_OK and socketio:
         chat_id = (data.get('chat_id') or '').strip()
         if chat_id:
             socketio.emit('call_end', {}, to=f'call:{chat_id}')
+
+    # ── Online presence ──────────────────────────────────────────────────────
+
+    @socketio.on('user_online')
+    def _sio_user_online():
+        """Member emits this on page load to register as online."""
+        email = session.get('user_email', '')
+        name  = session.get('user_name', '') or (email.split('@')[0] if email else '')
+        if not email or session.get('is_admin'):
+            return
+        sid = request.sid
+        with _sio_lock:
+            _online_users[sid] = {'email': email, 'name': name, 'last_seen': time.time()}
+        # Auto-join DM call room so Jeff can reach the member from any page
+        _sio_join(f'call:dm:{email}')
+
+    @socketio.on('user_heartbeat')
+    def _sio_user_heartbeat():
+        """Client sends every 30s to stay marked online."""
+        sid = request.sid
+        with _sio_lock:
+            if sid in _online_users:
+                _online_users[sid]['last_seen'] = time.time()
+
+
+@app.route('/api/online-users')
+def api_online_users():
+    """Return list of currently online members (admin only)."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'unauthorized'}), 403
+    cutoff = time.time() - 60  # drop users not heard from in 60 s
+    with _sio_lock:
+        raw = [u for u in _online_users.values() if u['last_seen'] > cutoff]
+    # Deduplicate by email (multiple tabs open)
+    seen, unique = set(), []
+    for u in raw:
+        if u['email'] not in seen:
+            seen.add(u['email'])
+            unique.append({'email': u['email'], 'name': u['name']})
+    return jsonify({'online': unique})
 
 
 if __name__ == '__main__':
