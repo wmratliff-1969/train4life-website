@@ -38,7 +38,8 @@ _sio_lock             = threading.Lock()
 _sio_broadcaster      = None   # socket-id of Jeff's broadcasting session
 _sio_viewers          = {}     # sid -> {email, name}
 _sio_broadcast_token  = None   # short-lived token issued at /admin/live page load
-_online_users         = {}     # sid -> {email, name, last_seen} — members online right now
+_online_users         = {}     # sid -> {email, name, last_seen} — socket-connected members
+_http_online          = {}     # email -> {name, last_seen}  — HTTP-ping-based presence (app + web)
 
 import markupsafe
 @app.template_filter('linkify')
@@ -3207,20 +3208,42 @@ if _SIO_OK and socketio:
                 _online_users[sid]['last_seen'] = time.time()
 
 
+@app.route('/api/ping-online', methods=['POST'])
+def api_ping_online():
+    """Any logged-in member hits this on page load to mark themselves online.
+    Works from web browsers AND iOS WKWebViews without requiring socket.io."""
+    email = session.get('user_email', '')
+    name  = session.get('user_name', '') or (email.split('@')[0] if email else '')
+    if not email or session.get('is_admin'):
+        return jsonify({'ok': False}), 403
+    with _sio_lock:
+        _http_online[email] = {'name': name, 'last_seen': time.time()}
+    return jsonify({'ok': True})
+
+
 @app.route('/api/online-users')
 def api_online_users():
-    """Return list of currently online members (admin only)."""
+    """Return list of currently online members (admin only).
+    Merges socket-based presence (_online_users) with HTTP-ping presence (_http_online)
+    so iOS app users and web users both appear."""
     if not session.get('is_admin'):
         return jsonify({'error': 'unauthorized'}), 403
-    cutoff = time.time() - 60  # drop users not heard from in 60 s
+    now = time.time()
+    socket_cutoff = now - 60   # socket heartbeat every 30s → 60s TTL
+    http_cutoff   = now - 90   # HTTP ping every 30s → 90s TTL (extra buffer)
     with _sio_lock:
-        raw = [u for u in _online_users.values() if u['last_seen'] > cutoff]
-    # Deduplicate by email (multiple tabs open)
+        socket_users = [u for u in _online_users.values() if u['last_seen'] > socket_cutoff]
+        http_users   = [{'email': e, 'name': v['name']}
+                        for e, v in _http_online.items() if v['last_seen'] > http_cutoff]
     seen, unique = set(), []
-    for u in raw:
+    for u in socket_users:
         if u['email'] not in seen:
             seen.add(u['email'])
             unique.append({'email': u['email'], 'name': u['name']})
+    for u in http_users:
+        if u['email'] not in seen:
+            seen.add(u['email'])
+            unique.append(u)
     return jsonify({'online': unique})
 
 

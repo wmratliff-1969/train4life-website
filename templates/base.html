@@ -1504,6 +1504,19 @@
   </script>
   {% endif %}
 
+  {# ── HTTP presence ping — works in web browsers AND iOS WKWebViews without socket.io ── #}
+  {% if session.get('logged_in') and not session.get('is_admin') %}
+  <script>
+  (function() {
+    function pingOnline() {
+      fetch('/api/ping-online', { method: 'POST', credentials: 'same-origin' }).catch(function(){});
+    }
+    pingOnline();
+    setInterval(pingOnline, 30000);
+  })();
+  </script>
+  {% endif %}
+
   {# ── Online presence + global incoming-call toast (members only) ── #}
   {% if session.get('logged_in') and not session.get('is_admin') %}
   <div id="global-call-toast" style="
