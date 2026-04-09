@@ -9,7 +9,7 @@
     text-transform: uppercase; margin-bottom: 0.4rem;
   }
   .alist-breadcrumb {
-    font-size: 0.78rem; color: rgba(255,255,255,0.35); margin-bottom: 1.5rem;
+    font-size: 0.78rem; color: rgba(255,255,255,0.35); margin-bottom: 0.8rem;
   }
   .alist-breadcrumb a { color: #22b9b0; text-decoration: none; }
   .section-label {
@@ -17,13 +17,7 @@
     text-transform: uppercase; color: rgba(255,255,255,0.3);
     margin: 1.4rem 0 0.6rem;
   }
-  .sub-label {
-    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em;
-    text-transform: uppercase; color: rgba(255,255,255,0.2);
-    margin: 1rem 0 0.4rem 0.2rem;
-    display: flex; align-items: center; gap: 0.4rem;
-  }
-  /* Group chat / DM rows */
+  /* Standard rows */
   .alist-row {
     display: flex; align-items: center; gap: 1rem;
     padding: 0.9rem 1.1rem; background: #1e1e1e; border-radius: 10px;
@@ -49,28 +43,37 @@
     padding: 0 4px; flex-shrink: 0;
   }
   .alist-arrow { color: rgba(255,255,255,0.22); font-size: 1.1rem; flex-shrink: 0; }
-  /* Online / Video panel */
-  .online-row {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 0.75rem 1.1rem; background: rgba(34,185,176,0.07);
-    border-radius: 10px; border: 1px solid rgba(34,185,176,0.18);
-    margin-bottom: 0.45rem;
+  /* Online Now panel */
+  .online-panel {
+    background: rgba(34,185,176,0.05); border: 1px solid rgba(34,185,176,0.15);
+    border-radius: 12px; padding: 0.7rem 0.9rem; margin-bottom: 1rem;
   }
-  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #22b9b0; flex-shrink: 0; box-shadow: 0 0 6px #22b9b0; }
-  .online-name { flex: 1; font-size: 0.92rem; font-weight: 700; }
-  .online-email { font-size: 0.72rem; color: rgba(255,255,255,0.38); }
+  .online-panel-label {
+    font-size: 0.6rem; font-weight: 800; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #22b9b0; margin-bottom: 0.5rem;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .online-dot-sm { width: 6px; height: 6px; border-radius: 50%; background: #22b9b0; box-shadow: 0 0 4px #22b9b0; }
+  .online-row {
+    display: flex; align-items: center; gap: 0.8rem;
+    padding: 0.5rem 0.2rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .online-row:last-child { border-bottom: none; }
+  .online-dot { width: 7px; height: 7px; border-radius: 50%; background: #22b9b0; flex-shrink: 0; box-shadow: 0 0 5px #22b9b0; }
+  .online-name { flex: 1; font-size: 0.88rem; font-weight: 700; }
+  .online-email { font-size: 0.68rem; color: rgba(255,255,255,0.35); }
   .btn-call-out {
     background: #e53e3e; color: #fff; border: none;
-    border-radius: 8px; padding: 0.45rem 0.9rem;
-    font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    border-radius: 7px; padding: 0.35rem 0.75rem;
+    font-size: 0.78rem; font-weight: 700; cursor: pointer;
     transition: background 0.15s, transform 0.1s; white-space: nowrap;
   }
   .btn-call-out:hover  { background: #c53030; }
   .btn-call-out:active { transform: scale(0.95); }
   .btn-call-out:disabled { background: rgba(229,62,62,0.3); cursor: default; }
-  #online-empty, #dm-empty {
-    font-size: 0.82rem; color: rgba(255,255,255,0.28); padding: 0.4rem 0;
-  }
+  #online-empty { font-size: 0.8rem; color: rgba(255,255,255,0.25); padding: 0.2rem 0; }
+  /* DM sub-list */
+  .dm-sublist { margin-top: 0.4rem; }
 </style>
 {% endblock %}
 
@@ -82,7 +85,16 @@
     <a href="/admin/dashboard">Dashboard</a> / Messages
   </div>
 
-  <!-- ── Group Chats ── -->
+  <!-- ── Online Now (admin-only, always at top) ── -->
+  <div class="online-panel">
+    <div class="online-panel-label">
+      <span class="online-dot-sm"></span> Online Now
+    </div>
+    <div id="online-list"></div>
+    <div id="online-empty">No members online right now.</div>
+  </div>
+
+  <!-- ── 1–3: Group Chats ── -->
   <div class="section-label">Group Chats</div>
 
   <a href="/admin/messages/announcements" class="alist-row">
@@ -112,36 +124,76 @@
     <div class="alist-arrow">›</div>
   </a>
 
-  <!-- ── Members ── -->
+  <!-- ── 4–5: Jeff ── -->
+  <div class="section-label">Jeff</div>
+
+  <a href="/messages/dm" class="alist-row">
+    <div class="alist-icon">💬</div>
+    <div class="alist-info">
+      <div class="alist-name">Direct Message Jeff</div>
+      <div class="alist-preview">Your DM inbox from members</div>
+    </div>
+    <div class="alist-arrow">›</div>
+  </a>
+
+  <a href="/video-jeff" class="alist-row">
+    <div class="alist-icon">📹</div>
+    <div class="alist-info">
+      <div class="alist-name">Video Call Jeff</div>
+      <div class="alist-preview">Your video call page</div>
+    </div>
+    <div class="alist-arrow">›</div>
+  </a>
+
+  <!-- ── 6–7: Members (admin tools) ── -->
   <div class="section-label">Members</div>
 
-  <!-- Video Member: Online Now with Call buttons -->
-  <div class="sub-label">📹 Video Member</div>
-  <div id="online-list"></div>
-  <div id="online-empty">No members online right now.</div>
+  <!-- Row 6: Direct Message Member — expands DM conversations below -->
+  <div class="alist-row" style="cursor:pointer;" onclick="toggleDmList()">
+    <div class="alist-icon">💬</div>
+    <div class="alist-info">
+      <div class="alist-name">Direct Message Member</div>
+      <div class="alist-preview">Text a specific member</div>
+    </div>
+    <div class="alist-arrow" id="dm-toggle-arrow">›</div>
+  </div>
 
-  <!-- Direct Message Member: existing DM conversations -->
-  <div class="sub-label">💬 Direct Message Member</div>
-  {% if dm_convos %}
-    {% for c in dm_convos %}
-    <a href="/admin/messages/dm/{{ c.email }}" class="alist-row">
-      <div class="alist-avatar">{{ c.name[0]|upper }}</div>
-      <div class="alist-info">
-        <div class="alist-name">{{ c.name }}</div>
-        <div class="alist-preview">{{ c.last_message }}</div>
+  <!-- DM conversations list (collapsed by default) -->
+  <div id="dm-sublist" class="dm-sublist" style="display:none;">
+    {% if dm_convos %}
+      {% for c in dm_convos %}
+      <a href="/admin/messages/dm/{{ c.email }}" class="alist-row" style="margin-left:0.5rem;">
+        <div class="alist-avatar">{{ c.name[0]|upper }}</div>
+        <div class="alist-info">
+          <div class="alist-name">{{ c.name }}</div>
+          <div class="alist-preview">{{ c.last_message }}</div>
+        </div>
+        {% if c.unread > 0 %}<div class="alist-badge">{{ c.unread }}</div>{% endif %}
+        <div class="alist-arrow">›</div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <div style="color:rgba(255,255,255,0.25);font-size:0.82rem;padding:0.6rem 1rem 0.8rem;">
+        No direct messages yet.
       </div>
-      {% if c.unread > 0 %}<div class="alist-badge">{{ c.unread }}</div>{% endif %}
-      <div class="alist-arrow">›</div>
-    </a>
-    {% endfor %}
-  {% else %}
-    <div id="dm-empty">No direct messages yet.</div>
-  {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Row 7: Video Call Member — scrolls to Online Now panel at top -->
+  <a href="#" class="alist-row" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">
+    <div class="alist-icon">📹</div>
+    <div class="alist-info">
+      <div class="alist-name">Video Call Member</div>
+      <div class="alist-preview">Call an online member — see Online Now above</div>
+    </div>
+    <div class="alist-arrow">↑</div>
+  </a>
 
 </div>
 
 <script>
 (function() {
+  /* ── Online Now panel ── */
   function renderOnline(members) {
     var list  = document.getElementById('online-list');
     var empty = document.getElementById('online-empty');
@@ -180,5 +232,14 @@
   pollOnlineUsers();
   setInterval(pollOnlineUsers, 5000);
 })();
+
+/* ── Toggle DM sub-list (row 6) ── */
+function toggleDmList() {
+  var sub   = document.getElementById('dm-sublist');
+  var arrow = document.getElementById('dm-toggle-arrow');
+  var open  = sub.style.display !== 'none';
+  sub.style.display   = open ? 'none' : 'block';
+  arrow.textContent   = open ? '›' : '˅';
+}
 </script>
 {% endblock %}

@@ -3,11 +3,7 @@
 
 {% block head_extra %}
 <style>
-  .mlist-wrap {
-    max-width: 560px;
-    margin: 80px auto 60px;
-    padding: 0 1.5rem;
-  }
+  .mlist-wrap { max-width: 560px; margin: 80px auto 60px; padding: 0 1.5rem; }
   .mlist-heading {
     font-size: 1.5rem; font-weight: 800;
     letter-spacing: 0.06em; text-transform: uppercase;
@@ -27,54 +23,21 @@
     transition: background 0.15s, border-color 0.15s;
   }
   .mlist-row:hover { background: #252525; border-color: rgba(34,185,176,0.3); color: #fff; }
+  /* Grayed-out / disabled rows for admin-only features */
+  .mlist-row-disabled {
+    opacity: 0.3; pointer-events: none; cursor: default;
+    filter: grayscale(0.4);
+  }
   .mlist-icon {
     width: 48px; height: 48px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.3rem; flex-shrink: 0;
   }
-  .mlist-avatar {
-    width: 48px; height: 48px; border-radius: 50%;
-    background: rgba(34,185,176,0.2);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem; font-weight: 800; color: #22b9b0; flex-shrink: 0;
-  }
   .mlist-info { flex: 1; min-width: 0; }
   .mlist-name { font-size: 0.95rem; font-weight: 700; }
-  .mlist-sub  { font-size: 0.78rem; color: rgba(255,255,255,0.42); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mlist-sub  { font-size: 0.78rem; color: rgba(255,255,255,0.42); margin-top: 2px; }
   .mlist-arrow { color: rgba(255,255,255,0.25); font-size: 1.1rem; flex-shrink: 0; }
-
-  /* Member search */
-  .member-search-box {
-    margin-bottom: 1rem;
-    display: flex; gap: 0.6rem;
-  }
-  .member-search-input {
-    flex: 1; background: #1e1e1e;
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
-    padding: 0.75rem 1rem; color: #fff; font-size: 0.9rem;
-    font-family: inherit; outline: none;
-    transition: border-color 0.2s;
-  }
-  .member-search-input:focus { border-color: rgba(34,185,176,0.4); }
-  .member-search-input::placeholder { color: rgba(255,255,255,0.25); }
-
-  .member-results {
-    background: #1e1e1e; border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.08);
-    overflow: hidden; display: none;
-    margin-bottom: 0.7rem;
-  }
-  .member-result-item {
-    display: flex; align-items: center; gap: 0.8rem;
-    padding: 0.75rem 1rem; cursor: pointer;
-    transition: background 0.15s;
-    text-decoration: none; color: #fff;
-  }
-  .member-result-item:hover { background: rgba(34,185,176,0.1); }
-  .member-result-item + .member-result-item { border-top: 1px solid rgba(255,255,255,0.05); }
-  .mr-avatar { width: 36px; height: 36px; border-radius: 50%; background: rgba(34,185,176,0.15); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 800; color: #22b9b0; flex-shrink: 0; }
-  .mr-name { font-size: 0.9rem; font-weight: 600; }
-  .mr-email { font-size: 0.75rem; color: rgba(255,255,255,0.35); margin-top: 1px; }
+  .mlist-lock  { color: rgba(255,255,255,0.3); font-size: 0.9rem; flex-shrink: 0; }
 </style>
 {% endblock %}
 
@@ -82,7 +45,7 @@
 <div class="mlist-wrap">
   <div class="mlist-heading">Messages</div>
 
-  <!-- ── Group Chats ── -->
+  <!-- ── 1–3: Group Chats ── -->
   <div class="mlist-section-label">Group Chats</div>
 
   <a href="/messages/announcements" class="mlist-row">
@@ -112,7 +75,7 @@
     <div class="mlist-arrow">›</div>
   </a>
 
-  <!-- ── Jeff ── -->
+  <!-- ── 4–5: Jeff ── -->
   <div class="mlist-section-label">Jeff</div>
 
   <a href="/messages/dm" class="mlist-row">
@@ -132,6 +95,27 @@
     </div>
     <div class="mlist-arrow">›</div>
   </a>
+
+  <!-- ── 6–7: Admin-only (visible but locked for members) ── -->
+  <div class="mlist-section-label">Members</div>
+
+  <div class="mlist-row mlist-row-disabled" aria-disabled="true">
+    <div class="mlist-icon" style="background:rgba(34,185,176,0.1);">💬</div>
+    <div class="mlist-info">
+      <div class="mlist-name">Direct Message Member</div>
+      <div class="mlist-sub">Jeff's admin tool</div>
+    </div>
+    <div class="mlist-lock">🔒</div>
+  </div>
+
+  <div class="mlist-row mlist-row-disabled" aria-disabled="true">
+    <div class="mlist-icon" style="background:rgba(229,62,62,0.12);">📹</div>
+    <div class="mlist-info">
+      <div class="mlist-name">Video Call Member</div>
+      <div class="mlist-sub">Jeff's admin tool</div>
+    </div>
+    <div class="mlist-lock">🔒</div>
+  </div>
 
 </div>
 {% endblock %}
