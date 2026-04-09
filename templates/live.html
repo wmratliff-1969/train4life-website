@@ -195,6 +195,19 @@
   }
   .btn-notify:hover { background: rgba(229,62,62,0.22); }
 
+  /* ── Custom message banner ── */
+  .custom-msg-banner {
+    width: 100%; max-width: 760px;
+    background: rgba(255, 210, 0, 0.08);
+    border: 1px solid rgba(255, 210, 0, 0.28);
+    border-radius: 12px;
+    padding: 0.85rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.75rem;
+    font-size: 0.97rem; font-weight: 600;
+    color: rgba(255,255,255,0.88); line-height: 1.45;
+  }
+
   @media (max-width: 800px) {
     .live-layout { flex-direction: column; }
     .live-chat-panel { width: 100%; height: 360px; }
@@ -315,6 +328,12 @@
     {% endif %}
   </div>
   {% endif %}
+
+  <!-- Custom message banner — shown when Jeff sets a message in admin/live -->
+  <div class="custom-msg-banner" id="custom-msg-banner" style="{% if not live_status_message %}display:none;{% endif %}">
+    <span style="font-size:1.2rem;flex-shrink:0;">📢</span>
+    <span id="custom-msg-text">{{ live_status_message or '' }}</span>
+  </div>
 
   <div class="live-layout">
 
@@ -486,6 +505,60 @@ _tick();setInterval(_tick,1000);
 {% endif %}
 
 function handleNotify(e){e.preventDefault();document.getElementById('notifyForm').style.display='none';document.getElementById('notify-success').style.display='block';}
+
+// ── Poll /api/live-status for message + countdown updates ──
+(function(){
+  var _cdTarget = null;
+  var _cdInterval = null;
+
+  function startCountdown(isoStr) {
+    var t = new Date(isoStr);
+    var cl = document.getElementById('page-countdown');
+    var sb = document.getElementById('page-countdown-sub');
+    if (!cl) return;
+    if (_cdInterval) clearInterval(_cdInterval);
+    function tick() {
+      var d = t - new Date();
+      if (d <= 0) {
+        if (cl) cl.textContent = 'LIVE NOW!';
+        if (sb) sb.textContent = 'The show has started — join now!';
+        clearInterval(_cdInterval); return;
+      }
+      var h = Math.floor(d/3600000), m = Math.floor((d%3600000)/60000), s = Math.floor((d%60000)/1000);
+      if (cl) cl.textContent = h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      var p=[]; if(h>0)p.push(h+(h===1?' hour':' hours')); if(m>0)p.push(m+(m===1?' minute':' minutes')); if(h===0&&s>0)p.push(s+' seconds');
+      if (sb) sb.textContent = p.join(', ') + ' until showtime';
+    }
+    _cdInterval = setInterval(tick, 1000); tick();
+  }
+
+  function applyUpdate(d) {
+    // Custom message banner
+    var banner = document.getElementById('custom-msg-banner');
+    var msgEl  = document.getElementById('custom-msg-text');
+    if (banner && msgEl) {
+      var msg = (d.message || '').trim();
+      msgEl.textContent = msg;
+      banner.style.display = msg ? 'flex' : 'none';
+    }
+    // Countdown: start/restart if target changed
+    if (d.status === 'countdown' && d.countdown_to) {
+      if (d.countdown_to !== _cdTarget) {
+        _cdTarget = d.countdown_to;
+        startCountdown(d.countdown_to);
+      }
+    }
+  }
+
+  function poll() {
+    fetch('/api/live-status')
+      .then(function(r){ return r.json(); })
+      .then(applyUpdate)
+      .catch(function(){});
+  }
+  poll();
+  setInterval(poll, 15000);
+})();
 
 // ── View mode switching ──
 (function(){
