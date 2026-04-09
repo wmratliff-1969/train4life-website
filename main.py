@@ -1508,23 +1508,38 @@ def api_content():
     })
 
 
-# ── LIVE SETTINGS (file-based, updated by /admin/live) ────────────────────────
+# ── LIVE SETTINGS (in-memory primary, file backup) ────────────────────────────
+# Railway's filesystem is ephemeral — resets on every deploy. Using an
+# in-memory dict as the authoritative store so saves survive across requests
+# within a running process. File write is best-effort for debugging only.
 _live_settings_path = os.path.join(_base, 'data', 'live-settings.json')
+_live_settings_mem = None   # None = not yet initialised
 
 def _load_live_settings():
-    """Read live settings from file, falling back to env vars."""
+    """Return current live settings. Memory is authoritative; file is fallback on first load."""
+    global _live_settings_mem
+    if _live_settings_mem is not None:
+        return dict(_live_settings_mem)
+    # First call this process: try to read from file (present on fresh deploy)
     if os.path.exists(_live_settings_path):
         try:
             with open(_live_settings_path) as f:
-                return json.load(f)
+                _live_settings_mem = json.load(f)
+                return dict(_live_settings_mem)
         except Exception:
             pass
+    _live_settings_mem = {}
     return {}
 
 def _save_live_settings(data):
+    global _live_settings_mem
+    _live_settings_mem = dict(data)          # always succeeds
     os.makedirs(os.path.dirname(_live_settings_path), exist_ok=True)
-    with open(_live_settings_path, 'w') as f:
-        json.dump(data, f, indent=2)
+    try:
+        with open(_live_settings_path, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass                                  # memory is the authority; file failure is non-fatal
 
 
 # ── OneSignal push notifications ───────────────────────────────────────────────
@@ -1570,20 +1585,23 @@ def _send_onesignal_push(status):
         pass   # never block the admin action if push fails
 
 def _get_live_vars():
-    """Return current live status vars — file overrides env vars."""
+    """Return current live status vars — saved settings override env vars."""
     settings = _load_live_settings()
-    status = settings.get('status') or os.environ.get('LIVE_STATUS', 'off')
+    # Use 'in' membership so saved empty-string doesn't silently fall through
+    status = settings['status'] if 'status' in settings else os.environ.get('LIVE_STATUS', 'off')
     if status not in ('off', 'countdown', 'live'):
         status = 'off'
-    countdown_to = settings.get('countdown_to') or os.environ.get('LIVE_COUNTDOWN_TO', '')
+    countdown_to = settings['countdown_to'] if 'countdown_to' in settings else os.environ.get('LIVE_COUNTDOWN_TO', '')
+    # message: use saved value if key exists (even if blank), else env var, else default
     _defaults = {
         'off':       '🔴 LIVE — RED BORDER = READY  |  RED GLOW = COMING SOON  |  SOLID RED = ON AIR NOW',
         'countdown': '🔴 GOING LIVE SOON — Click to get notified!',
         'live':      '🔴 WE ARE LIVE RIGHT NOW!',
     }
-    message = (settings.get('message')
-                or os.environ.get('LIVE_STATUS_MESSAGE', '')
-                or _defaults[status])
+    if 'message' in settings:
+        message = settings['message']           # honour whatever Jeff saved, including blank
+    else:
+        message = os.environ.get('LIVE_STATUS_MESSAGE', '') or _defaults[status]
     timer_for = settings.get('timer_for', 'both')
     if timer_for not in ('both', 'express', 'bible'):
         timer_for = 'both'
