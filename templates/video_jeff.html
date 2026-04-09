@@ -237,12 +237,29 @@ var chatId = {{ chat_id | tojson }};
     });
 
     // ── Call Jeff button ──────────────────────────────────────────────
+    // getUserMedia is called HERE (user-gesture context) so WKWebView on iOS
+    // doesn't silently block it when the socket event fires later.
     var callBtn = document.getElementById('callJeffBtn');
     if (callBtn) {
-      callBtn.addEventListener('click', function() {
+      callBtn.addEventListener('click', async function() {
         if (callState !== 'idle') return;
-        callState = 'calling';
         callBtn.disabled = true;
+        setStatus('Requesting camera…');
+
+        // Acquire stream from user-gesture context before any async work
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        } catch(err) {
+          callBtn.disabled = false;
+          var reason = err.name === 'NotAllowedError'
+            ? 'Camera/microphone permission denied. Please allow access in Settings and try again.'
+            : 'Camera error: ' + err.message;
+          setStatus(reason);
+          return;
+        }
+
+        callState = 'calling';
+        attachLocalVideo(localStream);
         setStatus('Calling Jeff…');
         socket.emit('call_invite', { chat_id: chatId });
         showOverlay('waiting');
@@ -250,6 +267,7 @@ var chatId = {{ chat_id | tojson }};
     }
 
     // ── Jeff accepted ─────────────────────────────────────────────────
+    // Stream already acquired during button click — just build the peer connection.
     socket.on('call_accept', async function(data) {
       if (callState !== 'calling') return;
       remoteSid = data.from;
@@ -257,8 +275,7 @@ var chatId = {{ chat_id | tojson }};
       showOverlay('active');
       setCallStatus('Connecting…');
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        attachLocalVideo(localStream);
+        if (!localStream) throw new Error('No camera stream — please try again.');
         pc = buildPeerConn(socket, remoteSid);
         localStream.getTracks().forEach(function(t) { pc.addTrack(t, localStream); });
         var offer = await pc.createOffer();
@@ -266,7 +283,7 @@ var chatId = {{ chat_id | tojson }};
         socket.emit('call_offer', { to: remoteSid, offer: offer });
         setCallStatus('Ringing…');
       } catch(err) {
-        setCallStatus('Camera error: ' + err.message);
+        setStatus('Connection error: ' + err.message);
         doEndCall();
       }
     });
@@ -301,12 +318,13 @@ var chatId = {{ chat_id | tojson }};
     document.getElementById('end-call-btn').addEventListener('click',    function() { doEndCall(); });
     document.getElementById('cancel-call-btn').addEventListener('click', function() { doEndCall(); });
 
-    function doEndCall(skipEmit) {
+    function doEndCall(skipEmit, statusMsg) {
       if (!skipEmit) socket.emit('call_end', { chat_id: chatId });
       cleanup(); hideOverlay();
       callState = 'idle'; remoteSid = null;
       if (callBtn) callBtn.disabled = false;
       setCallViewMode('default');
+      if (statusMsg) setStatus(statusMsg);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
