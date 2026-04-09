@@ -96,9 +96,27 @@
     <div class="mlist-arrow">›</div>
   </a>
 
-  <!-- ── 6–7: Admin-only (visible but locked for members) ── -->
+  <!-- ── 6–7: Admin tools (tappable for admin, locked for members) ── -->
   <div class="mlist-section-label">Members</div>
 
+  {% if session.get('is_admin') %}
+  <a href="/admin/messages#dm-section" class="mlist-row">
+    <div class="mlist-icon" style="background:rgba(34,185,176,0.15);">💬</div>
+    <div class="mlist-info">
+      <div class="mlist-name">Direct Message Member</div>
+      <div class="mlist-sub">Text a specific member</div>
+    </div>
+    <div class="mlist-arrow">›</div>
+  </a>
+  <a href="/admin/messages" class="mlist-row">
+    <div class="mlist-icon" style="background:rgba(229,62,62,0.18);">📹</div>
+    <div class="mlist-info">
+      <div class="mlist-name">Video Call Member</div>
+      <div class="mlist-sub">Call an online member</div>
+    </div>
+    <div class="mlist-arrow">›</div>
+  </a>
+  {% else %}
   <div class="mlist-row mlist-row-disabled" aria-disabled="true">
     <div class="mlist-icon" style="background:rgba(34,185,176,0.1);">💬</div>
     <div class="mlist-info">
@@ -107,7 +125,6 @@
     </div>
     <div class="mlist-lock">🔒</div>
   </div>
-
   <div class="mlist-row mlist-row-disabled" aria-disabled="true">
     <div class="mlist-icon" style="background:rgba(229,62,62,0.12);">📹</div>
     <div class="mlist-info">
@@ -116,6 +133,7 @@
     </div>
     <div class="mlist-lock">🔒</div>
   </div>
+  {% endif %}
 
 </div>
 {% endblock %}
