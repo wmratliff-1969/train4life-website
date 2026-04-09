@@ -1409,16 +1409,26 @@ def api_login():
         _save_users(users)
         return token
 
-    # ── 1. Local auth ──────────────────────────────────────────────────────
-    if user and user.get('password') == pw_hash:
+    def _set_session_and_respond(email, user, users):
+        """Set Flask session cookie (for WKWebView) AND return JSON token."""
         token = user.get('ios_token') or _mint_token(email, users)
+        name  = user.get('name', email.split('@')[0])
+        # Set Flask session so subsequent WKWebView requests (ping-online, etc.) work
+        session.permanent    = True
+        session['logged_in'] = True
+        session['user_email'] = email
+        session['user_name']  = name
         return _json({
             'success': True,
             'email':   email,
             'plan':    user.get('plan') or 'free',
-            'name':    user.get('name', email.split('@')[0]),
+            'name':    name,
             'token':   token,
         })
+
+    # ── 1. Local auth ──────────────────────────────────────────────────────
+    if user and user.get('password') == pw_hash:
+        return _set_session_and_respond(email, user, users)
 
     # ── 2. VHX fallback — email-only lookup, saves password for future ─────
     vhx_customer = _vhx_get_customer(email)
@@ -1426,14 +1436,7 @@ def api_login():
         users = _vhx_provision_user(email, users, vhx_customer, password_hash=pw_hash)
         _save_users(users)
         user  = users.get(email, {})
-        token = user.get('ios_token') or _mint_token(email, users)
-        return _json({
-            'success': True,
-            'email':   email,
-            'plan':    user.get('plan') or 'free',
-            'name':    user.get('name', email.split('@')[0]),
-            'token':   token,
-        })
+        return _set_session_and_respond(email, user, users)
 
     return _json({'success': False, 'error': 'Invalid email or password'}, 401)
 
@@ -3208,17 +3211,30 @@ if _SIO_OK and socketio:
                 _online_users[sid]['last_seen'] = time.time()
 
 
-@app.route('/api/ping-online', methods=['POST'])
+@app.route('/api/ping-online', methods=['GET', 'POST'])
 def api_ping_online():
     """Any logged-in member hits this on page load to mark themselves online.
-    Works from web browsers AND iOS WKWebViews without requiring socket.io."""
+    Works from web browsers AND iOS WKWebViews without requiring socket.io.
+    Accepts GET or POST so WKWebView fetch() calls always succeed."""
     email = session.get('user_email', '')
     name  = session.get('user_name', '') or (email.split('@')[0] if email else '')
     if not email or session.get('is_admin'):
-        return jsonify({'ok': False}), 403
+        return jsonify({'ok': False, 'reason': 'no session'}), 403
     with _sio_lock:
         _http_online[email] = {'name': name, 'last_seen': time.time()}
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'email': email})
+
+
+@app.route('/api/whoami')
+def api_whoami():
+    """Debug endpoint — returns current session state so you can verify
+    the iOS app / WKWebView is actually logged in."""
+    return jsonify({
+        'logged_in':  bool(session.get('logged_in')),
+        'user_email': session.get('user_email', None),
+        'user_name':  session.get('user_name', None),
+        'is_admin':   bool(session.get('is_admin')),
+    })
 
 
 @app.route('/api/online-users')
