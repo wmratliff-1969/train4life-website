@@ -112,70 +112,26 @@
     <div class="mlist-arrow">›</div>
   </a>
 
-  <!-- ── Direct Messages ── -->
-  <div class="mlist-section-label">Direct Messages</div>
+  <!-- ── Jeff ── -->
+  <div class="mlist-section-label">Jeff</div>
 
   <a href="/messages/dm" class="mlist-row">
-    <div class="mlist-icon" style="background:rgba(229,62,62,0.18);">🔴</div>
+    <div class="mlist-icon" style="background:rgba(34,185,176,0.15);">💬</div>
     <div class="mlist-info">
-      <div class="mlist-name">Jeff (Coach)</div>
-      <div class="mlist-sub">Private message with Jeff</div>
+      <div class="mlist-name">Direct Message</div>
+      <div class="mlist-sub">Private text message with Jeff</div>
     </div>
     <div class="mlist-arrow">›</div>
   </a>
 
-  <!-- Member-to-member recent conversations -->
-  {% for c in member_convos %}
-  <a href="/messages/member/{{ c.other_email }}" class="mlist-row">
-    <div class="mlist-avatar">{{ (c.other_name or '?')[0]|upper }}</div>
+  <a href="/video-jeff" class="mlist-row">
+    <div class="mlist-icon" style="background:rgba(229,62,62,0.18);">📹</div>
     <div class="mlist-info">
-      <div class="mlist-name">{{ c.other_name }}</div>
-      <div class="mlist-sub">
-        {% if c.last_message %}{{ c.last_message.content[:60] }}{% else %}No messages yet{% endif %}
-      </div>
+      <div class="mlist-name">Video Jeff</div>
+      <div class="mlist-sub">Live face-to-face video call with Jeff</div>
     </div>
     <div class="mlist-arrow">›</div>
   </a>
-  {% endfor %}
-
-  <!-- ── Message a Member ── -->
-  <div class="mlist-section-label">Message a Member</div>
-  <div class="member-search-box">
-    <input class="member-search-input" id="member-search"
-           placeholder="Search members by name…" autocomplete="off">
-  </div>
-  <div class="member-results" id="member-results"></div>
 
 </div>
-
-<script>
-(function(){
-  var inp=document.getElementById('member-search');
-  var box=document.getElementById('member-results');
-  var allMembers=[];
-
-  fetch('/api/members').then(function(r){return r.json();}).then(function(d){
-    allMembers=d.members||[];
-  }).catch(function(){});
-
-  inp.addEventListener('input',function(){
-    var q=(inp.value||'').trim().toLowerCase();
-    if(!q){box.style.display='none';box.innerHTML='';return;}
-    var results=allMembers.filter(function(m){
-      return m.name.toLowerCase().includes(q)||m.email.toLowerCase().includes(q);
-    }).slice(0,8);
-    if(!results.length){box.style.display='none';return;}
-    box.innerHTML=results.map(function(m){
-      var initial=(m.name||'?')[0].toUpperCase();
-      return '<a class="member-result-item" href="/messages/member/'+encodeURIComponent(m.email)+'">'
-           + '<div class="mr-avatar">'+initial+'</div>'
-           + '<div><div class="mr-name">'+_esc(m.name)+'</div><div class="mr-email">'+_esc(m.email)+'</div></div>'
-           + '</a>';
-    }).join('');
-    box.style.display='block';
-  });
-
-  function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-})();
-</script>
 {% endblock %}

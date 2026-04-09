@@ -1765,6 +1765,19 @@ def messages_page():
     return render_template('messages_list.html', unread=unread, member_convos=member_convos)
 
 
+@app.route('/video-jeff')
+@login_required
+def video_jeff():
+    """Dedicated face-to-face video call page — no text, just WebRTC with Jeff."""
+    email   = session.get('user_email', '')
+    chat_id = f'dm:{email}'
+    return render_template('video_jeff.html',
+        my_email=email,
+        chat_id=chat_id,
+        sio_enabled=_SIO_OK,
+    )
+
+
 @app.route('/messages/dm/<path:member_email>')
 @login_required
 def messages_dm_by_email(member_email):

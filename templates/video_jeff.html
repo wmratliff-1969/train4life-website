@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block title %}Video Jeff — TRAIN4LIFE{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* ── Page layout ── */
+  .vj-page {
+    min-height: calc(100vh - 60px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 2rem 1.5rem;
+  }
+
+  /* ── Idle state — big Call button ── */
+  #vj-idle {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 2rem; text-align: center;
+  }
+  .vj-avatar {
+    width: 100px; height: 100px; border-radius: 50%;
+    background: rgba(229,62,62,0.15);
+    border: 2px solid rgba(229,62,62,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem;
+  }
+  .vj-title {
+    font-size: 1.4rem; font-weight: 900; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #fff;
+  }
+  .vj-sub {
+    font-size: 0.88rem; color: rgba(255,255,255,0.45); margin-top: -1.2rem;
+  }
+  .btn-call-jeff {
+    background: #e53e3e; color: #fff; border: none;
+    border-radius: 50px; padding: 1.1rem 3rem;
+    font-size: 1.15rem; font-weight: 900; letter-spacing: 0.08em;
+    cursor: pointer; box-shadow: 0 0 28px rgba(229,62,62,0.5);
+    transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .btn-call-jeff:hover  { background: #c53030; box-shadow: 0 0 40px rgba(229,62,62,0.65); }
+  .btn-call-jeff:active { transform: scale(0.97); }
+  .btn-call-jeff:disabled { background: #555; box-shadow: none; cursor: not-allowed; }
+
+  /* ── Status line below button ── */
+  #vj-status {
+    font-size: 0.85rem; color: rgba(255,255,255,0.35); min-height: 1.2em;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     VIDEO CALL OVERLAY  (same structure as messages_chat.html)
+     ══════════════════════════════════════════════════════════════════ */
+  #call-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 400;
+    background: rgba(8,8,8,0.96);
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem;
+  }
+  #call-overlay.active { display: flex; }
+
+  #remote-video {
+    width: 100%; max-width: 640px; aspect-ratio: 16/9;
+    background: #111; border-radius: 14px; object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .remote-placeholder {
+    width: 100%; max-width: 640px; aspect-ratio: 16/9;
+    background: #111; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 0.75rem;
+  }
+  .remote-avatar {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(229,62,62,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.5rem;
+  }
+  .remote-name   { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+  .remote-status { font-size: 0.82rem; color: rgba(255,255,255,0.35); }
+
+  #local-video {
+    position: absolute; bottom: 90px; right: 16px;
+    width: 120px; aspect-ratio: 4/3;
+    background: #000; border-radius: 10px; object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.15);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  }
+
+  .call-controls {
+    display: flex; align-items: center; gap: 1.2rem; margin-top: 0.5rem;
+  }
+  .call-status-text {
+    font-size: 0.88rem; color: rgba(255,255,255,0.45);
+    text-align: center; min-height: 1.2em;
+  }
+  .btn-end-call {
+    background: #e53e3e; color: #fff; border: none;
+    border-radius: 50%; width: 60px; height: 60px;
+    font-size: 1.4rem; cursor: pointer;
+    box-shadow: 0 0 20px rgba(229,62,62,0.5);
+    transition: background 0.2s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-end-call:hover  { background: #c53030; transform: scale(1.05); }
+  .btn-end-call:active { transform: scale(0.95); }
+
+  .call-ring {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 3px solid rgba(229,62,62,0.15);
+    border-top-color: #e53e3e;
+    animation: spin 1s linear infinite; margin: 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .call-vm-bar {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 2px; padding: 4px 6px;
+    background: rgba(255,255,255,0.04);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0 0 14px 14px; margin-bottom: 0.5rem;
+    width: 100%; max-width: 640px;
+  }
+  .vm-btn {
+    background: none; border: none; color: rgba(255,255,255,0.35);
+    cursor: pointer; border-radius: 6px; padding: 4px 7px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s; line-height: 1;
+  }
+  .vm-btn:hover  { color: #fff; background: rgba(255,255,255,0.1); }
+  .vm-btn.active { color: #fff; background: rgba(255,255,255,0.15); }
+  .vm-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-right: 0.3rem; color: rgba(255,255,255,0.2); }
+
+  #call-active.vm-theater { max-width: min(95vw, 960px); }
+  #call-active.vm-theater #remote-video,
+  #call-active.vm-theater .remote-placeholder { max-width: min(95vw, 960px); }
+  #call-active.vm-theater .call-vm-bar { max-width: min(95vw, 960px); }
+  #call-active.vm-theater #local-video { width: 150px; }
+  #call-active { transition: max-width 0.3s ease; }
+
+  #call-overlay:fullscreen, #call-overlay:-webkit-full-screen { background: #000; }
+  #call-overlay:fullscreen #call-active,
+  #call-overlay:-webkit-full-screen #call-active { max-width: 100%; width: 100%; }
+  #call-overlay:fullscreen #remote-video,
+  #call-overlay:-webkit-full-screen #remote-video,
+  #call-overlay:fullscreen .remote-placeholder,
+  #call-overlay:-webkit-full-screen .remote-placeholder { max-width: 100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Video call overlay ── -->
+<div id="call-overlay">
+  <!-- Waiting / calling state -->
+  <div id="call-waiting" style="text-align:center;">
+    <div class="call-ring"></div>
+    <div style="margin-top:1rem;font-size:1rem;font-weight:700;color:rgba(255,255,255,0.7);">Calling Jeff…</div>
+    <div style="font-size:0.82rem;color:rgba(255,255,255,0.35);margin-top:0.4rem;">Waiting for Jeff to answer</div>
+    <button class="btn-end-call" id="cancel-call-btn" style="margin:1.5rem auto 0;" title="Cancel">📵</button>
+  </div>
+
+  <!-- Active call state -->
+  <div id="call-active" style="display:none;width:100%;max-width:640px;padding:0 1rem;position:relative;">
+    <div id="remote-placeholder" class="remote-placeholder">
+      <div class="remote-avatar">🏋️</div>
+      <div class="remote-name" id="remote-name-label">Jeff</div>
+      <div class="remote-status">Connecting…</div>
+    </div>
+    <video id="remote-video" autoplay playsinline style="display:none;width:100%;max-width:640px;aspect-ratio:16/9;border-radius:14px;object-fit:cover;"></video>
+    <video id="local-video"  autoplay muted playsinline></video>
+
+    <div class="call-vm-bar" id="call-vm-bar">
+      <span class="vm-label">View</span>
+      <button class="vm-btn active" data-mode="default" title="Default view">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="8,3 3,3 3,8"/><polyline points="12,3 17,3 17,8"/>
+          <polyline points="8,17 3,17 3,12"/><polyline points="12,17 17,17 17,12"/>
+        </svg>
+      </button>
+      <button class="vm-btn" data-mode="theater" title="Theater mode">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+          <rect x="1" y="4" width="18" height="12" rx="2"/>
+        </svg>
+      </button>
+      <button class="vm-btn" data-mode="fullscreen" title="Fullscreen">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="13,2 18,2 18,7"/><polyline points="7,2 2,2 2,7"/>
+          <polyline points="13,18 18,18 18,13"/><polyline points="7,18 2,18 2,13"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="call-controls-row" class="call-controls" style="display:none;">
+    <div class="call-status-text" id="call-status-text">Connected</div>
+  </div>
+  <button class="btn-end-call" id="end-call-btn" style="display:none;" title="End call">📵</button>
+</div>
+
+<!-- ── Idle page ── -->
+<div class="vj-page" id="vj-idle">
+  <div class="vj-avatar">🏋️</div>
+  <div>
+    <div class="vj-title">Video Jeff</div>
+    <div class="vj-sub">Face-to-face video call</div>
+  </div>
+  <button class="btn-call-jeff" id="callJeffBtn">
+    📹 Call Jeff
+  </button>
+  <div id="vj-status"></div>
+  <a href="/messages" style="font-size:0.82rem;color:rgba(255,255,255,0.3);text-decoration:none;margin-top:1rem;">← Back to Messages</a>
+</div>
+
+<script>
+var chatId = {{ chat_id | tojson }};
+
+{% if sio_enabled %}
+(function(){
+  var sioScript = document.createElement('script');
+  sioScript.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+  sioScript.crossOrigin = 'anonymous';
+  sioScript.onload = function() { initSocket(); };
+  document.head.appendChild(sioScript);
+
+  function initSocket() {
+    var socket = io({transports:['websocket'],upgrade:false});
+
+    var callState   = 'idle';
+    var remoteSid   = null;
+    var localStream = null;
+    var pc          = null;
+
+    socket.on('connect', function() {
+      socket.emit('join_call_room', { chat_id: chatId });
+    });
+
+    // ── Call Jeff button ──────────────────────────────────────────────
+    var callBtn = document.getElementById('callJeffBtn');
+    if (callBtn) {
+      callBtn.addEventListener('click', function() {
+        if (callState !== 'idle') return;
+        callState = 'calling';
+        callBtn.disabled = true;
+        setStatus('Calling Jeff…');
+        socket.emit('call_invite', { chat_id: chatId });
+        showOverlay('waiting');
+      });
+    }
+
+    // ── Jeff accepted ─────────────────────────────────────────────────
+    socket.on('call_accept', async function(data) {
+      if (callState !== 'calling') return;
+      remoteSid = data.from;
+      callState = 'active';
+      showOverlay('active');
+      setCallStatus('Connecting…');
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        attachLocalVideo(localStream);
+        pc = buildPeerConn(socket, remoteSid);
+        localStream.getTracks().forEach(function(t) { pc.addTrack(t, localStream); });
+        var offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('call_offer', { to: remoteSid, offer: offer });
+        setCallStatus('Ringing…');
+      } catch(err) {
+        setCallStatus('Camera error: ' + err.message);
+        doEndCall();
+      }
+    });
+
+    socket.on('call_decline', function() {
+      if (callState !== 'calling') return;
+      doEndCall(true);
+      setStatus('Jeff is unavailable right now.');
+    });
+
+    // ── Jeff sends answer ─────────────────────────────────────────────
+    socket.on('call_answer', async function(data) {
+      if (!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(function(){});
+      setCallStatus('Connected');
+    });
+
+    // ── ICE candidates ────────────────────────────────────────────────
+    socket.on('call_ice', function(data) {
+      if (pc && data.candidate)
+        pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
+    });
+
+    // ── Jeff ended the call ───────────────────────────────────────────
+    socket.on('call_end', function() {
+      if (callState === 'idle') return;
+      doEndCall(true);
+      setStatus('Call ended.');
+    });
+
+    // ── End / cancel buttons ──────────────────────────────────────────
+    document.getElementById('end-call-btn').addEventListener('click',    function() { doEndCall(); });
+    document.getElementById('cancel-call-btn').addEventListener('click', function() { doEndCall(); });
+
+    function doEndCall(skipEmit) {
+      if (!skipEmit) socket.emit('call_end', { chat_id: chatId });
+      cleanup(); hideOverlay();
+      callState = 'idle'; remoteSid = null;
+      if (callBtn) callBtn.disabled = false;
+      setCallViewMode('default');
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    function buildPeerConn(socket, peerSid) {
+      var p = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      p.onicecandidate = function(e) {
+        if (e.candidate) socket.emit('call_ice', { to: peerSid, candidate: e.candidate });
+      };
+      p.ontrack = function(e) {
+        var rv = document.getElementById('remote-video');
+        var rp = document.getElementById('remote-placeholder');
+        if (rv && !rv.srcObject) {
+          rv.style.display = 'block';
+          if (rp) rp.style.display = 'none';
+          rv.srcObject = e.streams[0];
+          rv.play().catch(function(){});
+        }
+        setCallStatus('Connected');
+      };
+      p.onconnectionstatechange = function() {
+        if (p.connectionState === 'disconnected' || p.connectionState === 'failed') doEndCall();
+      };
+      return p;
+    }
+
+    function attachLocalVideo(stream) {
+      var lv = document.getElementById('local-video');
+      if (lv) { lv.srcObject = stream; lv.play().catch(function(){}); }
+    }
+
+    function cleanup() {
+      if (pc)          { pc.close(); pc = null; }
+      if (localStream) { localStream.getTracks().forEach(function(t){ t.stop(); }); localStream = null; }
+      var rv = document.getElementById('remote-video'), lv = document.getElementById('local-video');
+      if (rv) { rv.srcObject = null; rv.style.display = 'none'; }
+      if (lv) { lv.srcObject = null; }
+      var rp = document.getElementById('remote-placeholder'); if (rp) rp.style.display = 'flex';
+    }
+
+    function showOverlay(state) {
+      var overlay  = document.getElementById('call-overlay');
+      var waiting  = document.getElementById('call-waiting');
+      var active   = document.getElementById('call-active');
+      var controls = document.getElementById('call-controls-row');
+      var endBtn   = document.getElementById('end-call-btn');
+      overlay.classList.add('active');
+      if (state === 'waiting') {
+        waiting.style.display  = 'block';
+        active.style.display   = 'none';
+        if (controls) controls.style.display = 'none';
+        if (endBtn)   endBtn.style.display   = 'none';
+      } else {
+        waiting.style.display  = 'none';
+        active.style.display   = 'block';
+        if (controls) controls.style.display = 'flex';
+        if (endBtn)   endBtn.style.display   = 'flex';
+      }
+    }
+
+    function hideOverlay() {
+      document.getElementById('call-overlay').classList.remove('active');
+    }
+
+    function setCallStatus(msg) {
+      var el = document.getElementById('call-status-text'); if (el) el.textContent = msg;
+    }
+
+    function setStatus(msg) {
+      var el = document.getElementById('vj-status'); if (el) el.textContent = msg;
+    }
+
+    // ── View mode switching ───────────────────────────────────────────
+    var callCurrentMode = 'default';
+    var callVmBar = document.getElementById('call-vm-bar');
+    if (callVmBar) {
+      callVmBar.querySelectorAll('.vm-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { setCallViewMode(btn.getAttribute('data-mode')); });
+      });
+    }
+    function setCallViewMode(mode) {
+      if (callVmBar) {
+        callVmBar.querySelectorAll('.vm-btn').forEach(function(b) { b.classList.remove('active'); });
+        var ab = callVmBar.querySelector('[data-mode="' + mode + '"]');
+        if (ab) ab.classList.add('active');
+      }
+      var ca = document.getElementById('call-active');
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      }
+      callCurrentMode = mode;
+      if (ca) { ca.classList.remove('vm-theater'); if (mode === 'theater') ca.classList.add('vm-theater'); }
+      if (mode === 'fullscreen') {
+        var ol = document.getElementById('call-overlay');
+        if (ol) { var req = ol.requestFullscreen || ol.webkitRequestFullscreen; if (req) req.call(ol); }
+      }
+    }
+    document.addEventListener('fullscreenchange', function() {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && callCurrentMode === 'fullscreen')
+        setCallViewMode('default');
+    });
+    document.addEventListener('webkitfullscreenchange', function() {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && callCurrentMode === 'fullscreen')
+        setCallViewMode('default');
+    });
+  }
+})();
+{% else %}
+document.getElementById('callJeffBtn').addEventListener('click', function() {
+  document.getElementById('vj-status').textContent = 'Video calls are not available right now.';
+});
+{% endif %}
+</script>
+{% endblock %}
