@@ -1587,6 +1587,7 @@ def _send_onesignal_push(status):
 def _get_live_vars():
     """Return current live status vars — saved settings override env vars."""
     settings = _load_live_settings()
+    print(f'[DEBUG] _get_live_vars: mem_id={id(_live_settings_mem)} settings={settings}', flush=True)
     # Use 'in' membership so saved empty-string doesn't silently fall through
     status = settings['status'] if 'status' in settings else os.environ.get('LIVE_STATUS', 'off')
     if status not in ('off', 'countdown', 'live'):
@@ -2356,6 +2357,7 @@ def admin_live():
     status, countdown_to, message, timer_for, stream_url = _get_live_vars()
     saved = False
     if request.method == 'POST':
+        print(f'[DEBUG] admin_live POST received — form keys: {list(request.form.keys())}', flush=True)
         new_status = request.form.get('status', 'off')
         if new_status not in ('off', 'countdown', 'live'):
             new_status = 'off'
@@ -2365,6 +2367,7 @@ def admin_live():
         if new_timer_for not in ('both', 'express', 'bible'):
             new_timer_for = 'both'
         new_stream_url = request.form.get('stream_url', '').strip()
+        print(f'[DEBUG] admin_live saving: status={new_status!r} countdown={new_countdown!r} message={new_message!r} timer_for={new_timer_for!r}', flush=True)
         _save_live_settings({
             'status':       new_status,
             'countdown_to': new_countdown,
@@ -2372,6 +2375,7 @@ def admin_live():
             'timer_for':    new_timer_for,
             'stream_url':   new_stream_url,
         })
+        print(f'[DEBUG] admin_live save done — mem now: {_live_settings_mem}', flush=True)
         _send_onesignal_push(new_status)
         status, countdown_to, message, timer_for, stream_url = new_status, new_countdown, new_message, new_timer_for, new_stream_url
         saved = True
