@@ -1765,6 +1765,15 @@ def messages_page():
     return render_template('messages_list.html', unread=unread, member_convos=member_convos)
 
 
+@app.route('/messages/dm/<path:member_email>')
+@login_required
+def messages_dm_by_email(member_email):
+    """Canonical DM URL: /messages/dm/<email>  — redirects to /messages/dm.
+    The session already identifies the logged-in member; the email in the URL
+    is informational so direct links work from the iOS app."""
+    return redirect(url_for('messages_chat', chat_id='dm'))
+
+
 @app.route('/messages/<chat_id>', methods=['GET', 'POST'])
 @login_required
 def messages_chat(chat_id):
@@ -1898,12 +1907,20 @@ def api_get_messages():
     since     = request.args.get('since', '')
 
     if chat == 'dm':
-        # DMs require auth
+        # Short form: ?chat=dm&member_id=email@example.com
         if not email:
             return jsonify({'error': 'unauthorized'}), 401
         chat_id = f'dm:{member_id}'
         if not is_admin and member_id != email:
             return jsonify({'error': 'forbidden'}), 403
+    elif chat.startswith('dm:'):
+        # Full form: ?chat=dm:email@example.com  (sent by the member's own page)
+        if not email:
+            return jsonify({'error': 'unauthorized'}), 401
+        dm_email = chat[3:]
+        if not is_admin and dm_email != email:
+            return jsonify({'error': 'forbidden'}), 403
+        chat_id = chat
     elif chat in CHAT_IDS:
         # Group chats are readable without auth (public community channels)
         chat_id = chat
