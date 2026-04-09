@@ -1247,22 +1247,25 @@
         {% endif %}
         <li><a href="/resources" style="font-size:16px;font-weight:700;letter-spacing:0.08em;">Resources</a></li>
         <li>
-          {% if viewer_sees_live and live_status == 'live' %}
-            <a href="{{ live_stream_url if live_stream_url else '/live' }}"
-               {% if live_stream_url %}target="_blank" rel="noopener noreferrer"{% endif %}
-               class="nav-live state-live"
-               style="display:inline-flex;align-items:center;gap:8px;background:#CC0000;border:3px solid #FF0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 25px rgba(255,0,0,0.7);">
-              🔴 LIVE NOW
+          {% if viewer_sees_live and live_status == 'live' and request.endpoint == 'live' %}
+            {# Member is actively on the /live page watching — solid red fill #}
+            <a href="/live" class="nav-live state-watching"
+               style="display:inline-flex;align-items:center;gap:8px;background:#CC0000;border:2px solid #CC0000;color:#ffffff;font-size:15px;font-weight:800;padding:9px 28px;border-radius:8px;letter-spacing:0.12em;text-align:center;text-decoration:none;margin-left:16px;">
+              LIVE
             </a>
-          {% elif viewer_sees_live and live_status == 'countdown' %}
-            <a href="/live" class="nav-live state-countdown"
-               style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:3px solid #CC0000;color:#ffffff;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;box-shadow:0 0 20px rgba(204,0,0,0.5);">
-              🔴 LIVE SOON
+          {% elif viewer_sees_live and live_status == 'live' %}
+            {# Jeff is live — red outline, transparent background #}
+            <a href="/live" class="nav-live state-live"
+               style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:2px solid #CC0000;color:#CC0000;font-size:15px;font-weight:800;padding:9px 28px;border-radius:8px;letter-spacing:0.12em;text-align:center;text-decoration:none;margin-left:16px;">
+              LIVE
             </a>
           {% else %}
+            {# Off or countdown — subtle gray outline, always visible and clickable #}
             <a href="/live" class="nav-live state-off"
-               style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:3px solid #333;color:#555;font-size:17px;font-weight:900;padding:12px 50px;border-radius:30px;letter-spacing:0.15em;min-width:180px;text-align:center;text-decoration:none;margin-left:24px;pointer-events:none;cursor:default;">
-              ⚫ LIVE
+               style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:2px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.45);font-size:15px;font-weight:700;padding:9px 28px;border-radius:8px;letter-spacing:0.12em;text-align:center;text-decoration:none;margin-left:16px;transition:border-color 0.2s,color 0.2s;"
+               onmouseover="this.style.borderColor='rgba(255,255,255,0.4)';this.style.color='rgba(255,255,255,0.75)'"
+               onmouseout="this.style.borderColor='rgba(255,255,255,0.18)';this.style.color='rgba(255,255,255,0.45)'">
+              LIVE
             </a>
           {% endif %}
         </li>

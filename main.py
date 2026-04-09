@@ -748,6 +748,7 @@ _ensure_jeff_account()
 @app.context_processor
 def inject_globals():
     status, countdown_to, message, timer_for, stream_url = _get_live_vars()
+    settings = _load_live_settings()
     return dict(
         is_live=(status == 'live'),
         live_status=status,
@@ -756,6 +757,9 @@ def inject_globals():
         live_timer_for=timer_for,
         live_stream_url=stream_url,
         viewer_section=_viewer_section(),
+        banner_enabled=settings.get('banner_enabled', True),
+        ticker_enabled=settings.get('ticker_enabled', False),
+        ticker_text=settings.get('ticker_text', ''),
     )
 
 
@@ -773,6 +777,7 @@ def api_live_status():
     webrtc_active = (_sio_broadcaster is not None)
     if webrtc_active:
         status = 'live'
+    settings = _load_live_settings()
     response = jsonify({
         'status': status,
         'countdown_to': countdown_to,
@@ -780,6 +785,9 @@ def api_live_status():
         'timer_for': timer_for,
         'stream_url': stream_url,
         'webrtc_active': webrtc_active,
+        'banner_enabled': settings.get('banner_enabled', True),
+        'ticker_enabled': settings.get('ticker_enabled', False),
+        'ticker_text': settings.get('ticker_text', ''),
     })
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
@@ -2445,25 +2453,35 @@ def admin_live():
         new_timer_for  = request.form.get('timer_for', 'both')
         if new_timer_for not in ('both', 'express', 'bible'):
             new_timer_for = 'both'
-        new_stream_url = request.form.get('stream_url', '').strip()
+        new_stream_url    = request.form.get('stream_url', '').strip()
+        new_banner_enabled = '1' in request.form.getlist('banner_enabled')
+        new_ticker_enabled = '1' in request.form.getlist('ticker_enabled')
+        new_ticker_text    = request.form.get('ticker_text', '').strip()
         print(f'[DEBUG] admin_live saving: status={new_status!r} countdown={new_countdown!r} message={new_message!r} timer_for={new_timer_for!r}', flush=True)
         _save_live_settings({
-            'status':       new_status,
-            'countdown_to': new_countdown,
-            'message':      new_message,
-            'timer_for':    new_timer_for,
-            'stream_url':   new_stream_url,
+            'status':         new_status,
+            'countdown_to':   new_countdown,
+            'message':        new_message,
+            'timer_for':      new_timer_for,
+            'stream_url':     new_stream_url,
+            'banner_enabled': new_banner_enabled,
+            'ticker_enabled': new_ticker_enabled,
+            'ticker_text':    new_ticker_text,
         })
         print(f'[DEBUG] admin_live save done — mem now: {_live_settings_mem}', flush=True)
         _send_onesignal_push(new_status)
         status, countdown_to, message, timer_for, stream_url = new_status, new_countdown, new_message, new_timer_for, new_stream_url
         saved = True
+    settings = _load_live_settings()
     return render_template('admin_live.html',
                            live_status=status,
                            live_countdown_to=countdown_to,
                            live_message=message,
                            live_timer_for=timer_for,
                            live_stream_url=stream_url,
+                           live_banner_enabled=settings.get('banner_enabled', True),
+                           live_ticker_enabled=settings.get('ticker_enabled', False),
+                           live_ticker_text=settings.get('ticker_text', ''),
                            saved=saved,
                            broadcast_token=_sio_broadcast_token)
 

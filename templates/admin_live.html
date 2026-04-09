@@ -277,13 +277,42 @@
     </div>
 
     <div class="a-card" style="margin-top:14px;">
-      <div class="a-card-head">Custom Message</div>
+      <div class="a-card-head" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Message Banner</span>
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:600;cursor:pointer;color:#9ca3af;">
+          <input type="hidden" name="banner_enabled" value="0">
+          <input type="checkbox" name="banner_enabled" value="1"
+            {% if live_banner_enabled %}checked{% endif %}
+            id="banner-toggle"
+            style="width:16px;height:16px;accent-color:#e53e3e;cursor:pointer;">
+          Show on /live
+        </label>
+      </div>
       <div class="a-form-group" style="margin-bottom:0;">
-        <label class="a-label">Status Bar Message <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
-        <div class="a-hint">Leave blank to use the default message for each state.</div>
+        <div class="a-hint">Gold banner that appears above the video. Leave blank to hide even if toggled on.</div>
         <input class="a-input" type="text" name="message"
           value="{{ live_message }}"
-          placeholder="e.g. Special event tonight at 7PM CT!">
+          placeholder="e.g. Tonight's session starts at 6AM CT — get ready!">
+      </div>
+    </div>
+
+    <div class="a-card" style="margin-top:14px;">
+      <div class="a-card-head" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Scrolling Ticker</span>
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:600;cursor:pointer;color:#9ca3af;">
+          <input type="hidden" name="ticker_enabled" value="0">
+          <input type="checkbox" name="ticker_enabled" value="1"
+            {% if live_ticker_enabled %}checked{% endif %}
+            id="ticker-toggle"
+            style="width:16px;height:16px;accent-color:#e53e3e;cursor:pointer;">
+          Show on /live
+        </label>
+      </div>
+      <div class="a-form-group" style="margin-bottom:0;">
+        <div class="a-hint">ESPN-style red bar that scrolls across the bottom of the screen. Leave blank to hide.</div>
+        <input class="a-input" type="text" name="ticker_text"
+          value="{{ live_ticker_text }}"
+          placeholder="e.g. 🔴 LIVE NOW — 6AM CT Workout &amp; Bible Study with Jeff — Tune in below!">
       </div>
     </div>
 

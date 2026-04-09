@@ -276,6 +276,57 @@
     .live-chat-panel { width: 100%; }
   }
 
+  /* ── ESPN-style scrolling ticker ── */
+  .espn-ticker {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 38px;
+    background: #CC0000;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    z-index: 900;
+  }
+  .espn-ticker-label {
+    flex-shrink: 0;
+    background: #111;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0 14px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    border-right: 2px solid rgba(255,255,255,0.25);
+  }
+  .espn-ticker-scroll {
+    flex: 1;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+  .espn-ticker-track {
+    display: flex;
+    white-space: nowrap;
+    animation: tickerRoll 18s linear infinite;
+  }
+  .espn-ticker-track span {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    padding-right: 80px;
+    letter-spacing: 0.03em;
+  }
+  @keyframes tickerRoll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  /* Push page content up so ticker doesn't cover the bottom */
+  body.ticker-on .live-page { padding-bottom: 5rem; }
+
   /* ── Landscape mobile: hide everything except the video ── */
   @media screen and (orientation: landscape) and (max-height: 450px) {
     /* Hide all chrome — nav, headers, chat, info sections */
@@ -315,6 +366,7 @@
   }
 </style>
 
+{% if ticker_enabled and ticker_text %}<script>document.body.classList.add('ticker-on');</script>{% endif %}
 <div class="live-page">
 
   {% if live_status != 'live' or not viewer_sees_live %}
@@ -329,8 +381,8 @@
   </div>
   {% endif %}
 
-  <!-- Custom message banner — shown when Jeff sets a message in admin/live -->
-  <div class="custom-msg-banner" id="custom-msg-banner" style="{% if not live_status_message %}display:none;{% endif %}">
+  <!-- Gold message banner — shown when Jeff enables it in admin/live -->
+  <div class="custom-msg-banner" id="custom-msg-banner" style="{% if not (banner_enabled and live_status_message) %}display:none;{% endif %}">
     <span style="font-size:1.2rem;flex-shrink:0;">📢</span>
     <span id="custom-msg-text">{{ live_status_message or '' }}</span>
   </div>
@@ -457,6 +509,30 @@
 
   </div>
 
+  <!-- ESPN Ticker -->
+  {% if ticker_enabled and ticker_text %}
+  <div class="espn-ticker" id="espn-ticker">
+    <div class="espn-ticker-label">TRAIN4LIFE</div>
+    <div class="espn-ticker-scroll">
+      <div class="espn-ticker-track" id="espn-ticker-track">
+        {# Duplicate text so the animation loops seamlessly #}
+        <span>{{ ticker_text }}</span>
+        <span>{{ ticker_text }}</span>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="espn-ticker" id="espn-ticker" style="display:none;">
+    <div class="espn-ticker-label">TRAIN4LIFE</div>
+    <div class="espn-ticker-scroll">
+      <div class="espn-ticker-track" id="espn-ticker-track">
+        <span id="espn-ticker-text"></span>
+        <span id="espn-ticker-text2"></span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Notify section -->
   {% if live_status != 'live' %}
   <div class="notify-section">
@@ -533,13 +609,26 @@ function handleNotify(e){e.preventDefault();document.getElementById('notifyForm'
   }
 
   function applyUpdate(d) {
-    // Custom message banner
+    // Gold message banner
     var banner = document.getElementById('custom-msg-banner');
     var msgEl  = document.getElementById('custom-msg-text');
     if (banner && msgEl) {
       var msg = (d.message || '').trim();
+      var showBanner = d.banner_enabled && msg;
       msgEl.textContent = msg;
-      banner.style.display = msg ? 'flex' : 'none';
+      banner.style.display = showBanner ? 'flex' : 'none';
+    }
+    // ESPN ticker
+    var ticker = document.getElementById('espn-ticker');
+    var track  = document.getElementById('espn-ticker-track');
+    if (ticker) {
+      var txt = (d.ticker_text || '').trim();
+      var showTicker = d.ticker_enabled && txt;
+      ticker.style.display = showTicker ? 'flex' : 'none';
+      document.body.classList.toggle('ticker-on', !!showTicker);
+      if (track && txt) {
+        track.innerHTML = '<span>' + txt + '</span><span>' + txt + '</span>';
+      }
     }
     // Countdown: start/restart if target changed
     if (d.status === 'countdown' && d.countdown_to) {
