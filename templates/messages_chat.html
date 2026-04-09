@@ -79,26 +79,34 @@
   /* ════════════════════════════════════════════════════
      VIDEO CALL OVERLAY
      ════════════════════════════════════════════════════ */
+  /* ── Full-screen video call — FaceTime style ── */
   #call-overlay {
     display: none;
-    position: fixed; inset: 0; z-index: 400;
-    background: rgba(8,8,8,0.93);
-    flex-direction: column; align-items: center; justify-content: center;
-    gap: 1rem;
+    position: fixed; inset: 0;
+    z-index: 9999;
+    background: #000;
   }
-  #call-overlay.active { display: flex; }
+  /* Use block (not flex) so #call-active can fill via position:absolute */
+  #call-overlay.active { display: block; }
 
-  /* Remote video — fills the call container */
+  /* Waiting state — absolutely centered */
+  #call-waiting { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+
+  /* Active call — fills the entire overlay */
+  #call-active { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* Remote video — covers the whole screen */
   #remote-video {
-    width: 100%; max-width: none; aspect-ratio: 16/9;
-    background: #111; border-radius: 14px; object-fit: cover;
-    border: 1px solid rgba(255,255,255,0.08);
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; background: #000;
+    border-radius: 0; border: none;
   }
-  /* No-video placeholder shown when remote hasn't connected yet */
+  /* Placeholder while video connects — also fills screen */
   .remote-placeholder {
-    width: 100%; max-width: none; aspect-ratio: 16/9;
-    background: #111; border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.08);
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    background: #111; border-radius: 0; border: none;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 0.75rem;
   }
@@ -111,39 +119,49 @@
   .remote-name { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.7); }
   .remote-status { font-size: 0.82rem; color: rgba(255,255,255,0.35); }
 
-  /* Local video — PiP corner */
+  /* Local video — PiP pinned bottom-right, above the remote video */
   #local-video {
-    position: absolute; bottom: 90px; right: 16px;
-    width: 120px; aspect-ratio: 4/3;
+    position: absolute; bottom: 110px; right: 20px; z-index: 2;
+    width: 160px; aspect-ratio: 4/3;
     background: #000; border-radius: 10px; object-fit: cover;
-    border: 2px solid rgba(255,255,255,0.15);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.2);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.7);
   }
 
-  /* Call controls */
-  .call-controls {
-    display: flex; align-items: center; gap: 1.2rem; margin-top: 0.5rem;
+  /* Status text — overlaid bottom-center */
+  #call-controls-row {
+    position: absolute; bottom: 108px; left: 50%; transform: translateX(-50%);
+    z-index: 3; display: flex; align-items: center; gap: 1.2rem;
   }
   .call-status-text {
-    font-size: 0.88rem; color: rgba(255,255,255,0.45);
+    font-size: 0.88rem; color: rgba(255,255,255,0.7);
     text-align: center; min-height: 1.2em;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9);
   }
+
+  /* End-call button — overlaid bottom-center */
+  #end-call-btn {
+    position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%);
+    z-index: 3;
+  }
+  #cancel-call-btn { margin: 1.5rem auto 0; }
+
   .btn-end-call {
     background: #e53e3e; color: #fff; border: none;
-    border-radius: 50%; width: 60px; height: 60px;
-    font-size: 1.4rem; cursor: pointer;
-    box-shadow: 0 0 20px rgba(229,62,62,0.5);
+    border-radius: 50%; width: 64px; height: 64px;
+    font-size: 1.5rem; cursor: pointer;
+    box-shadow: 0 0 28px rgba(229,62,62,0.7);
     transition: background 0.2s, transform 0.1s;
     display: flex; align-items: center; justify-content: center;
   }
-  .btn-end-call:hover  { background: #c53030; transform: scale(1.05); }
+  .btn-end-call:hover  { background: #c53030; transform: scale(1.07); }
   .btn-end-call:active { transform: scale(0.95); }
 
   /* Incoming call toast */
   #call-incoming-toast {
     display: none;
     position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-    z-index: 500; background: #1e1e1e;
+    z-index: 10000; background: #1e1e1e;
     border: 1px solid rgba(229,62,62,0.5);
     border-radius: 16px; padding: 1rem 1.4rem;
     box-shadow: 0 8px 32px rgba(0,0,0,0.7);
@@ -171,50 +189,29 @@
   /* Calling spinner ring */
   .call-ring {
     width: 80px; height: 80px; border-radius: 50%;
-    border: 3px solid rgba(34,185,176,0.15);
-    border-top-color: #22b9b0;
+    border: 3px solid rgba(34,185,176,0.15); border-top-color: #22b9b0;
     animation: spin 1s linear infinite; margin: 0 auto;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Call overlay view mode bar ── */
+  /* View mode bar — overlaid top-right corner */
   .call-vm-bar {
+    position: absolute; top: 14px; right: 14px; z-index: 3;
     display: flex; align-items: center; justify-content: flex-end;
     gap: 2px; padding: 4px 6px;
-    background: rgba(255,255,255,0.04);
-    border-top: 1px solid rgba(255,255,255,0.06);
-    border-radius: 0 0 14px 14px; margin-top: 0; margin-bottom: 0.5rem;
-    width: 100%; max-width: none;
+    background: rgba(0,0,0,0.45); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    width: auto;
   }
   .vm-btn {
-    background: none; border: none; color: rgba(255,255,255,0.35);
+    background: none; border: none; color: rgba(255,255,255,0.5);
     cursor: pointer; border-radius: 6px; padding: 4px 7px;
     display: flex; align-items: center; justify-content: center;
     transition: color 0.15s, background 0.15s; line-height: 1;
   }
-  .vm-btn:hover  { color: #fff; background: rgba(255,255,255,0.1); }
-  .vm-btn.active { color: #fff; background: rgba(255,255,255,0.15); }
-  .vm-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-right: 0.3rem; color: rgba(255,255,255,0.2); }
-
-  /* Default call container — large */
-  #call-active { width: min(90vw, 960px); max-width: min(90vw, 960px); transition: width 0.3s ease; }
-
-  /* Theater — full-width */
-  #call-active.vm-theater { width: min(96vw, 1280px); max-width: min(96vw, 1280px); }
-  #call-active.vm-theater #local-video { width: 160px; }
-
-  /* Fullscreen overlay styles */
-  #call-overlay:fullscreen,
-  #call-overlay:-webkit-full-screen { background: #000; }
-  #call-overlay:fullscreen #call-active,
-  #call-overlay:-webkit-full-screen #call-active { width: 100%; max-width: 100%; }
-
-  /* Mobile — fill the full screen */
-  @media (max-width: 600px) {
-    #call-active { width: 100vw !important; max-width: 100vw !important; padding: 0 !important; border-radius: 0; }
-    #remote-video, .remote-placeholder { border-radius: 0; }
-    #local-video { width: 90px; bottom: 80px; right: 8px; }
-  }
+  .vm-btn:hover  { color: #fff; background: rgba(255,255,255,0.12); }
+  .vm-btn.active { color: #fff; background: rgba(255,255,255,0.18); }
+  .vm-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-right: 0.3rem; color: rgba(255,255,255,0.3); }
 </style>
 {% endblock %}
 
@@ -241,14 +238,14 @@
   </div>
 
   <!-- Active call state -->
-  <div id="call-active" style="display:none;padding:0 1rem;position:relative;">
+  <div id="call-active" style="display:none;">
     <!-- Remote video / placeholder -->
     <div id="remote-placeholder" class="remote-placeholder">
       <div class="remote-avatar" id="remote-avatar">?</div>
       <div class="remote-name" id="remote-name-label">Connecting…</div>
       <div class="remote-status">Video will appear shortly</div>
     </div>
-    <video id="remote-video" autoplay playsinline style="display:none;width:100%;aspect-ratio:16/9;border-radius:14px;object-fit:cover;"></video>
+    <video id="remote-video" autoplay playsinline style="display:none;"></video>
 
     <!-- Local PiP -->
     <video id="local-video" autoplay muted playsinline></video>
