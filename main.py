@@ -85,7 +85,7 @@ LIVE_COUNTDOWN_TO = os.environ.get('LIVE_COUNTDOWN_TO', '').strip()
 
 # Status bar message — auto-set by state, or override with LIVE_STATUS_MESSAGE
 _default_messages = {
-    'off':       '🔴 LIVE — Red border = ready  |  Red glow = coming soon  |  Solid red = ON AIR NOW',
+    'off':       '',
     'countdown': '🔴 GOING LIVE IN',
     'live':      '🔴 WE ARE LIVE RIGHT NOW!',
 }
@@ -1644,7 +1644,7 @@ def _get_live_vars():
     countdown_to = settings['countdown_to'] if 'countdown_to' in settings else os.environ.get('LIVE_COUNTDOWN_TO', '')
     # message: use saved value if key exists (even if blank), else env var, else default
     _defaults = {
-        'off':       '🔴 LIVE — RED BORDER = READY  |  RED GLOW = COMING SOON  |  SOLID RED = ON AIR NOW',
+        'off':       '',
         'countdown': '🔴 GOING LIVE SOON — Click to get notified!',
         'live':      '🔴 WE ARE LIVE RIGHT NOW!',
     }
