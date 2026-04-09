@@ -478,6 +478,20 @@ if (inp) {
     socket.on('connect', function() {
       socket.emit('join_chat',      { chat_id: chatId });
       socket.emit('join_call_room', { chat_id: chatId });
+      // Auto-accept if member navigated here by tapping Accept on the call toast
+      var params = new URLSearchParams(window.location.search);
+      var callerSid = params.get('call_from');
+      if (callerSid) {
+        history.replaceState(null, '', window.location.pathname);
+        setTimeout(function() {
+          if (callState !== 'idle') return;
+          callState = 'active';
+          remoteSid = callerSid;
+          socket.emit('call_accept', { to: callerSid });
+          showOverlay('active');
+          setCallStatus('Connecting…');
+        }, 400);
+      }
     });
 
     // ── Real-time messages ────────────────────────────────────────────

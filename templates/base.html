@@ -1562,8 +1562,8 @@
 
     document.getElementById('gct-accept').addEventListener('click', function() {
       document.getElementById('global-call-toast').style.display = 'none';
-      // Navigate to DM page which has the full call UI
-      window.location.href = '/messages/dm';
+      // Pass caller's SID so the DM page can auto-emit call_accept on arrival
+      window.location.href = '/messages/dm?call_from=' + encodeURIComponent(pendingFrom || '');
     });
 
     document.getElementById('gct-decline').addEventListener('click', function() {

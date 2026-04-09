@@ -154,37 +154,10 @@
 
 </div>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 (function() {
-  var socket = io();
-  var callingEmail = null;
-
-  socket.on('call_decline', function(data) {
-    if (data.to_email === callingEmail) {
-      callingEmail = null;
-      var btn = document.querySelector('.btn-call-out[data-email="' + data.to_email + '"]');
-      if (btn) { btn.disabled = false; btn.textContent = '📹 Call'; }
-    }
-  });
-
-  socket.on('call_end', function() {
-    callingEmail = null;
-    document.querySelectorAll('.btn-call-out').forEach(function(b) {
-      b.disabled = false; b.textContent = '📹 Call';
-    });
-  });
-
-  function callMember(email, name, btn) {
-    if (callingEmail) return;
-    callingEmail = email;
-    btn.disabled = true;
-    btn.textContent = 'Calling…';
-    socket.emit('call_invite', { to_email: email, from: 'Jeff' });
-  }
-
   function renderOnline(members) {
-    var list = document.getElementById('online-list');
+    var list  = document.getElementById('online-list');
     var empty = document.getElementById('online-empty');
     if (!members || members.length === 0) {
       list.innerHTML = '';
@@ -193,20 +166,22 @@
     }
     empty.style.display = 'none';
     list.innerHTML = members.map(function(m) {
+      var safeEmail = m.email.replace(/"/g, '&quot;');
+      var safeName  = m.name.replace(/</g, '&lt;');
       return '<div class="online-row">' +
         '<div class="online-dot"></div>' +
-        '<div class="online-name">' + m.name +
-          '<div class="online-email">' + m.email + '</div>' +
+        '<div class="online-name">' + safeName +
+          '<div class="online-email">' + safeEmail + '</div>' +
         '</div>' +
-        '<button class="btn-call-out" data-email="' + m.email + '" data-name="' + m.name + '">📹 Call</button>' +
+        '<button class="btn-call-out" data-email="' + safeEmail + '">📹 Call</button>' +
       '</div>';
     }).join('');
     list.querySelectorAll('.btn-call-out').forEach(function(btn) {
-      if (btn.dataset.email === callingEmail) {
-        btn.disabled = true; btn.textContent = 'Calling…';
-      }
       btn.addEventListener('click', function() {
-        callMember(btn.dataset.email, btn.dataset.name, btn);
+        // Navigate to the DM chat page with ?call=1 so the call overlay
+        // opens automatically there. The chat page handles all WebRTC logic.
+        window.location.href = '/admin/messages/dm/' +
+          encodeURIComponent(btn.dataset.email) + '?call=1';
       });
     });
   }

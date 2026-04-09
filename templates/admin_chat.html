@@ -571,6 +571,14 @@ if (inp) {
     socket.on('connect', function() {
       socket.emit('join_chat',      { chat_id: chatId });
       socket.emit('join_call_room', { chat_id: chatId });
+      // Auto-initiate call when navigated from the Online Now panel (?call=1)
+      if (new URLSearchParams(window.location.search).get('call') === '1') {
+        history.replaceState(null, '', window.location.pathname);
+        setTimeout(function() {
+          var vb = document.getElementById('videoBtn');
+          if (vb && callState === 'idle') vb.click();
+        }, 400);
+      }
     });
 
     // ── Real-time messages ────────────────────────────────────────────
