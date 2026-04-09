@@ -15,30 +15,15 @@
   .section-label {
     font-size: 0.68rem; font-weight: 800; letter-spacing: 0.15em;
     text-transform: uppercase; color: rgba(255,255,255,0.3);
-    margin: 1.2rem 0 0.5rem;
+    margin: 1.4rem 0 0.6rem;
   }
-  /* Online members panel */
-  #online-section { margin-bottom: 0.5rem; }
-  .online-row {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 0.75rem 1.1rem; background: rgba(34,185,176,0.07);
-    border-radius: 10px; border: 1px solid rgba(34,185,176,0.18);
-    margin-bottom: 0.45rem;
+  .sub-label {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em;
+    text-transform: uppercase; color: rgba(255,255,255,0.2);
+    margin: 1rem 0 0.4rem 0.2rem;
+    display: flex; align-items: center; gap: 0.4rem;
   }
-  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #22b9b0; flex-shrink: 0; box-shadow: 0 0 6px #22b9b0; }
-  .online-name { flex: 1; font-size: 0.92rem; font-weight: 700; }
-  .online-email { font-size: 0.72rem; color: rgba(255,255,255,0.38); }
-  .btn-call-out {
-    background: #e53e3e; color: #fff; border: none;
-    border-radius: 8px; padding: 0.45rem 0.9rem;
-    font-size: 0.82rem; font-weight: 700; cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
-    white-space: nowrap;
-  }
-  .btn-call-out:hover  { background: #c53030; }
-  .btn-call-out:active { transform: scale(0.95); }
-  .btn-call-out:disabled { background: rgba(229,62,62,0.3); cursor: default; }
-  #online-empty { font-size: 0.82rem; color: rgba(255,255,255,0.28); padding: 0.4rem 0; }
+  /* Group chat / DM rows */
   .alist-row {
     display: flex; align-items: center; gap: 1rem;
     padding: 0.9rem 1.1rem; background: #1e1e1e; border-radius: 10px;
@@ -47,9 +32,7 @@
     transition: background 0.15s, border-color 0.15s;
   }
   .alist-row:hover { background: #252525; border-color: rgba(34,185,176,0.3); }
-  .alist-icon {
-    font-size: 1.4rem; flex-shrink: 0; width: 40px; text-align: center;
-  }
+  .alist-icon { font-size: 1.4rem; flex-shrink: 0; width: 40px; text-align: center; }
   .alist-avatar {
     width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
     background: linear-gradient(135deg,#22b9b0,#2f8c78);
@@ -66,6 +49,28 @@
     padding: 0 4px; flex-shrink: 0;
   }
   .alist-arrow { color: rgba(255,255,255,0.22); font-size: 1.1rem; flex-shrink: 0; }
+  /* Online / Video panel */
+  .online-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.75rem 1.1rem; background: rgba(34,185,176,0.07);
+    border-radius: 10px; border: 1px solid rgba(34,185,176,0.18);
+    margin-bottom: 0.45rem;
+  }
+  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #22b9b0; flex-shrink: 0; box-shadow: 0 0 6px #22b9b0; }
+  .online-name { flex: 1; font-size: 0.92rem; font-weight: 700; }
+  .online-email { font-size: 0.72rem; color: rgba(255,255,255,0.38); }
+  .btn-call-out {
+    background: #e53e3e; color: #fff; border: none;
+    border-radius: 8px; padding: 0.45rem 0.9rem;
+    font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    transition: background 0.15s, transform 0.1s; white-space: nowrap;
+  }
+  .btn-call-out:hover  { background: #c53030; }
+  .btn-call-out:active { transform: scale(0.95); }
+  .btn-call-out:disabled { background: rgba(229,62,62,0.3); cursor: default; }
+  #online-empty, #dm-empty {
+    font-size: 0.82rem; color: rgba(255,255,255,0.28); padding: 0.4rem 0;
+  }
 </style>
 {% endblock %}
 
@@ -77,12 +82,7 @@
     <a href="/admin/dashboard">Dashboard</a> / Messages
   </div>
 
-  <div class="section-label">Online Now</div>
-  <div id="online-section">
-    <div id="online-list"></div>
-    <div id="online-empty">No members online right now.</div>
-  </div>
-
+  <!-- ── Group Chats ── -->
   <div class="section-label">Group Chats</div>
 
   <a href="/admin/messages/announcements" class="alist-row">
@@ -112,28 +112,16 @@
     <div class="alist-arrow">›</div>
   </a>
 
-  <div class="section-label">Jeff</div>
+  <!-- ── Members ── -->
+  <div class="section-label">Members</div>
 
-  <a href="/messages/dm" class="alist-row">
-    <div class="alist-icon">💬</div>
-    <div class="alist-info">
-      <div class="alist-name">Direct Message</div>
-      <div class="alist-preview">Your private thread with members</div>
-    </div>
-    <div class="alist-arrow">›</div>
-  </a>
+  <!-- Video Member: Online Now with Call buttons -->
+  <div class="sub-label">📹 Video Member</div>
+  <div id="online-list"></div>
+  <div id="online-empty">No members online right now.</div>
 
-  <a href="/video-jeff" class="alist-row">
-    <div class="alist-icon">📹</div>
-    <div class="alist-info">
-      <div class="alist-name">Video Jeff</div>
-      <div class="alist-preview">Face-to-face video call page</div>
-    </div>
-    <div class="alist-arrow">›</div>
-  </a>
-
-  <div class="section-label">Direct Messages</div>
-
+  <!-- Direct Message Member: existing DM conversations -->
+  <div class="sub-label">💬 Direct Message Member</div>
   {% if dm_convos %}
     {% for c in dm_convos %}
     <a href="/admin/messages/dm/{{ c.email }}" class="alist-row">
@@ -147,9 +135,7 @@
     </a>
     {% endfor %}
   {% else %}
-    <div style="color:rgba(255,255,255,0.28);font-size:0.85rem;padding:0.8rem 0;">
-      No direct messages yet.
-    </div>
+    <div id="dm-empty">No direct messages yet.</div>
   {% endif %}
 
 </div>
@@ -178,8 +164,6 @@
     }).join('');
     list.querySelectorAll('.btn-call-out').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        // Navigate to the DM chat page with ?call=1 so the call overlay
-        // opens automatically there. The chat page handles all WebRTC logic.
         window.location.href = '/admin/messages/dm/' +
           encodeURIComponent(btn.dataset.email) + '?call=1';
       });
