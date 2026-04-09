@@ -407,7 +407,7 @@
     // ── New viewer joined — create WebRTC offer ──
     socket.on('new_viewer',async function(d){
       var sid=d.sid;
-      var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+      var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]});
       peerConns[sid]=pc;
       if(localStream)localStream.getTracks().forEach(function(t){pc.addTrack(t,localStream);});
       pc.onicecandidate=function(e){if(e.candidate)socket.emit('webrtc_ice',{to:sid,candidate:e.candidate});};

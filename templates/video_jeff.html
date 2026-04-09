@@ -311,7 +311,7 @@ var chatId = {{ chat_id | tojson }};
 
     // ── Helpers ───────────────────────────────────────────────────────
     function buildPeerConn(socket, peerSid) {
-      var p = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      var p = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] });
       p.onicecandidate = function(e) {
         if (e.candidate) socket.emit('call_ice', { to: peerSid, candidate: e.candidate });
       };
