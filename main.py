@@ -800,9 +800,10 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
         print(f'[APNs] send error: {e}')
 
 
-def _push_to_member(email, title, body, notif_type):
+def _push_to_member(email, title, body, notif_type, extra=None):
     """Send a targeted push to a specific member.
     Uses APNs directly if apns_device_token is stored; falls back to OneSignal.
+    extra: optional dict merged into the data payload (e.g. {'url': '/video-jeff'}).
     Runs in a background thread so it never blocks a request."""
     users      = _load_users()
     user       = users.get(email, {})
@@ -813,7 +814,10 @@ def _push_to_member(email, title, body, notif_type):
         print(f'[PUSH] no push token for {email}, skipping')
         return
 
-    extra_data = {'data': {'type': notif_type}}
+    data_dict  = {'type': notif_type}
+    if extra:
+        data_dict.update(extra)
+    extra_data = {'data': data_dict}
 
     def _send():
         # ── APNs (primary) ────────────────────────────────────────────
@@ -3189,6 +3193,18 @@ if _SIO_OK and socketio:
         chat_id     = (data.get('chat_id') or '').strip()
         caller_name = (session.get('user_name') or session.get('user_email') or 'Someone').split()[0]
         if chat_id:
+            # ── APNs push FIRST — fires before socket so it arrives even if
+            #    the member's WKWebView socket is not connected ──────────────
+            if chat_id.startswith('dm:') and session.get('is_admin'):
+                member_email = chat_id[3:].lower()
+                _push_to_member(
+                    member_email,
+                    '📹 Incoming Video Call',
+                    'Jeff is calling you \u2014 tap to answer',
+                    'video_call',
+                    extra={'url': '/video-jeff'},
+                )
+
             payload = {'from': request.sid, 'caller_name': caller_name, 'chat_id': chat_id}
             socketio.emit('call_invite', payload, to=f'call:{chat_id}', include_self=False)
             # When a member calls, also ping the admin's global toast (any admin page)
