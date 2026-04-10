@@ -819,8 +819,10 @@ def _push_to_member(email, title, body, notif_type, extra=None):
     apns_token = user.get('apns_device_token', '').strip()
     player_id  = user.get('onesignal_player_id', '').strip()
 
+    print(f'[PUSH] → {email!r}: apns={apns_token[:20]!r}{"..." if apns_token else ""} onesignal={player_id[:20]!r}{"..." if player_id else ""}')
+
     if not apns_token and not player_id:
-        print(f'[PUSH] no push token for {email}, skipping')
+        print(f'[PUSH] ❌ no push token for {email!r} — register-device not called yet or token not saved')
         return
 
     data_dict  = {'type': notif_type}
@@ -1877,7 +1879,8 @@ def _msg_auth():
         if len(parts) == 2:
             email, token = parts[0], parts[1]
             if _ios_auth(email, token):
-                return email, False
+                _admin_emails = {JEFF_EMAIL.lower(), 'jeff@train4life.life', 'wmratliff@gmail.com'}
+                return email, email.lower() in _admin_emails
     return None, False
 
 
@@ -2260,6 +2263,10 @@ def api_post_message():
 
     if chat == 'dm':
         chat_id = f'dm:{member_id}'
+    elif chat.startswith('dm:'):
+        # Full form sent by admin web page: "dm:mark@train4life.life"
+        chat_id   = chat
+        member_id = chat[3:]
     elif chat in CHAT_IDS:
         if chat == 'announcements' and not is_admin:
             return jsonify({'error': 'only admin can post to announcements'}), 403
@@ -2271,8 +2278,10 @@ def api_post_message():
 
     # Push notification — targeted to DM recipient or broadcast for group chats
     if is_admin:
-        if chat == 'dm':
-            _push_to_member(member_id,
+        if chat_id.startswith('dm:'):
+            push_target = chat_id[3:]
+            print(f'[MSG] DM send from Jeff → pushing to {push_target!r}')
+            _push_to_member(push_target,
                             '💬 New message from Jeff',
                             content[:100],
                             'dm')
@@ -2420,6 +2429,7 @@ def admin_api_send():
     # Push notification — targeted for DM, broadcast for group chats
     if chat_id.startswith('dm:'):
         target_email = chat_id[3:]
+        print(f'[MSG] /admin/api/send DM → pushing to {target_email!r}')
         _push_to_member(target_email, '💬 New message from Jeff', content[:100], 'dm')
     else:
         _fire_onesignal('💬 New message from Jeff', content[:100])
