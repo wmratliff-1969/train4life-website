@@ -814,10 +814,16 @@ def _push_to_member(email, title, body, notif_type, extra=None):
     Uses APNs directly if apns_device_token is stored; falls back to OneSignal.
     extra: optional dict merged into the data payload (e.g. {'url': '/video-jeff'}).
     Runs in a background thread so it never blocks a request."""
-    users      = _load_users()
-    user       = users.get(email, {})
-    apns_token = user.get('apns_device_token', '').strip()
-    player_id  = user.get('onesignal_player_id', '').strip()
+    # ── Token lookup: Redis first (survives restarts), then users.json fallback ──
+    redis_tokens = _redis_get_tokens(email)
+    apns_token   = (redis_tokens.get('apns') or '').strip()
+    player_id    = (redis_tokens.get('onesignal') or '').strip()
+
+    if not apns_token or not player_id:
+        # Fill in anything Redis is missing from users.json
+        user       = _load_users().get(email, {})
+        apns_token = apns_token or user.get('apns_device_token', '').strip()
+        player_id  = player_id  or user.get('onesignal_player_id', '').strip()
 
     print(f'[PUSH] → {email!r}: apns={apns_token[:20]!r}{"..." if apns_token else ""} onesignal={player_id[:20]!r}{"..." if player_id else ""}')
 
@@ -1687,6 +1693,42 @@ def _upstash_set(data):
         print(f'[UPSTASH] set → {r.status_code}', flush=True)
     except Exception as e:
         print(f'[UPSTASH] set error: {e}', flush=True)
+
+
+def _redis_set_token(email, field, value):
+    """Persist a device token to Redis. Key: apns_token:<email>, field: apns|onesignal."""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        return
+    key = f'device_tokens:{email.lower()}'
+    try:
+        # HSET key field value
+        r = _http.post(
+            f'{_UPSTASH_URL}/hset/{key}/{field}/{value}',
+            headers={'Authorization': f'Bearer {_UPSTASH_TOKEN}'},
+            timeout=3,
+        )
+        print(f'[REDIS] device token saved: {key} {field}={value[:20]}... → {r.status_code}', flush=True)
+    except Exception as e:
+        print(f'[REDIS] set token error for {email}: {e}', flush=True)
+
+
+def _redis_get_tokens(email):
+    """Fetch device tokens from Redis. Returns dict with apns/onesignal keys (may be empty)."""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        return {}
+    key = f'device_tokens:{email.lower()}'
+    try:
+        r = _http.get(
+            f'{_UPSTASH_URL}/hgetall/{key}',
+            headers={'Authorization': f'Bearer {_UPSTASH_TOKEN}'},
+            timeout=3,
+        )
+        result = r.json().get('result') or []
+        # Upstash HGETALL returns a flat list: [field, value, field, value, ...]
+        return {result[i]: result[i + 1] for i in range(0, len(result) - 1, 2)}
+    except Exception as e:
+        print(f'[REDIS] get token error for {email}: {e}', flush=True)
+        return {}
 
 def _load_live_settings():
     """Return current live settings. In-memory cache → Upstash → file seed."""
@@ -3435,9 +3477,11 @@ def api_register_device():
     if apns_token:
         users[email]['apns_device_token'] = apns_token
         print(f'[DEVICE] ✅ APNs token saved for {email}: {apns_token}')
+        _redis_set_token(email, 'apns', apns_token)
     if player_id:
         users[email]['onesignal_player_id'] = player_id
         print(f'[DEVICE] ✅ OneSignal player_id saved for {email}: {player_id}')
+        _redis_set_token(email, 'onesignal', player_id)
     _save_users(users)
     # Verify what was actually written
     saved = _load_users().get(email, {})
