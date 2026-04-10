@@ -3332,6 +3332,15 @@ def api_incoming_call():
                     'chat_id':     f'dm:{target_email}',
                     'expires_at':  time.time() + 30,
                 }
+                # Fire APNs push immediately — do not rely solely on SocketIO call_invite
+                # (SocketIO often fails to connect inside WKWebView on iOS)
+                _push_to_member(
+                    target_email,
+                    '📹 Incoming Video Call',
+                    f'{caller_name} is calling you \u2014 tap to answer',
+                    'video_call',
+                    extra={'url': '/video-jeff'},
+                )
             return jsonify({'ok': True})
         else:
             # Member clearing their own pending call (accepted or declined)
@@ -3385,12 +3394,39 @@ def api_register_device():
         return jsonify({'ok': False, 'error': 'unauthorized'}), 401
     if apns_token:
         users[email]['apns_device_token'] = apns_token
-        print(f'[DEVICE] APNs token registered {email} → {apns_token[:20]}...')
+        print(f'[DEVICE] ✅ APNs token saved for {email}: {apns_token}')
     if player_id:
         users[email]['onesignal_player_id'] = player_id
-        print(f'[DEVICE] OneSignal player_id registered {email} → {player_id}')
+        print(f'[DEVICE] ✅ OneSignal player_id saved for {email}: {player_id}')
     _save_users(users)
-    return jsonify({'ok': True})
+    # Verify what was actually written
+    saved = _load_users().get(email, {})
+    print(f'[DEVICE] 📋 Verified users.json for {email}: apns_device_token={saved.get("apns_device_token","(none)")[:20]}...')
+    return jsonify({'ok': True, 'apns_token_saved': bool(apns_token), 'player_id_saved': bool(player_id)})
+
+
+@app.route('/api/test-push', methods=['GET', 'POST'])
+def api_test_push():
+    """Send a test APNs push to the currently logged-in user (GET or POST).
+    Useful for verifying APNs config + device token registration."""
+    email, _ = _msg_auth()
+    if not email:
+        return jsonify({'ok': False, 'error': 'not logged in'}), 401
+    users      = _load_users()
+    user       = users.get(email, {})
+    apns_token = user.get('apns_device_token', '').strip()
+    player_id  = user.get('onesignal_player_id', '').strip()
+    if not apns_token and not player_id:
+        return jsonify({'ok': False, 'error': f'no push token registered for {email}',
+                        'hint': 'open the app and wait for DeviceRegistration to run'}), 400
+    print(f'[TEST-PUSH] sending test push to {email} apns={apns_token[:20] if apns_token else "none"} onesignal={player_id[:20] if player_id else "none"}')
+    _push_to_member(email, '🔔 Test Push', f'APNs working for {email}!', 'message')
+    return jsonify({
+        'ok': True,
+        'email': email,
+        'apns_token': apns_token[:20] + '...' if apns_token else None,
+        'player_id':  player_id[:20] + '...' if player_id else None,
+    })
 
 
 @app.route('/api/online-users')
