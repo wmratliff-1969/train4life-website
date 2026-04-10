@@ -3245,8 +3245,8 @@ def api_online_users():
     if not session.get('is_admin'):
         return jsonify({'error': 'unauthorized'}), 403
     now = time.time()
-    socket_cutoff = now - 60   # socket heartbeat every 30s → 60s TTL
-    http_cutoff   = now - 90   # HTTP ping every 30s → 90s TTL (extra buffer)
+    socket_cutoff = now - 300  # socket heartbeat every 30s → 5 min TTL
+    http_cutoff   = now - 300  # HTTP ping every 60s → 5 min TTL
     with _sio_lock:
         socket_users = [u for u in _online_users.values() if u['last_seen'] > socket_cutoff]
         http_users   = [{'email': e, 'name': v['name']}

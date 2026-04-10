@@ -1575,8 +1575,14 @@
     function pingOnline() {
       fetch('/api/ping-online', { method: 'POST', credentials: 'same-origin' }).catch(function(){});
     }
+    // Ping immediately on load, then every 60 s
     pingOnline();
-    setInterval(pingOnline, 30000);
+    setInterval(pingOnline, 60000);
+    // Ping immediately when page becomes visible again — covers idle WKWebView
+    // screens, backgrounded app tabs, and device wake-from-sleep scenarios
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') { pingOnline(); }
+    });
   })();
   </script>
   {% endif %}
