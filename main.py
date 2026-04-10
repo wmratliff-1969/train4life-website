@@ -742,6 +742,41 @@ def _send_onesignal_push_msg(heading, body_text, segment='All', filters=None):
     """Wrapper kept for backwards compat — delegates to _fire_onesignal."""
     _fire_onesignal(heading, body_text)
 
+
+def _push_to_member(email, title, body, notif_type):
+    """Send a targeted OneSignal push to a specific member via their stored player_id.
+    If no player_id is registered yet, skips silently (avoids notifying everyone).
+    Runs in a background thread so it never blocks a request."""
+    users     = _load_users()
+    player_id = users.get(email, {}).get('onesignal_player_id', '').strip()
+    if not player_id:
+        print(f'[PUSH] no player_id for {email}, skipping')
+        return
+    api_key = os.environ.get('ONESIGNAL_API_KEY',
+        'os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq')
+    app_id  = os.environ.get('ONESIGNAL_APP_ID', '83f97781-4adb-423b-b6d2-d0c079ee5877')
+    payload = {
+        'app_id':             app_id,
+        'include_player_ids': [player_id],
+        'headings':           {'en': title},
+        'contents':           {'en': body},
+        'ios_sound':          'default',
+        'data':               {'type': notif_type},
+    }
+    def _send():
+        try:
+            import requests as _rp
+            resp = _rp.post(
+                'https://onesignal.com/api/v1/notifications',
+                headers={'Authorization': f'Basic {api_key}', 'Content-Type': 'application/json'},
+                json=payload, timeout=5,
+            )
+            print(f'[PUSH] {notif_type} → {email}: {resp.status_code} {resp.text[:120]}')
+        except Exception as e:
+            print(f'[PUSH] error sending to {email}: {e}')
+    threading.Thread(target=_send, daemon=True).start()
+
+
 # Ensure Jeff's member account exists on every startup
 _ensure_jeff_account()
 
@@ -2029,37 +2064,13 @@ def api_video_start():
         }
 
     # ── Push notification (only sent when room is first created) ─────────────
-    if is_admin:
-        push_title = '📹 Jeff is calling!'
-        push_body  = 'Tap to join the video call'
-    else:
-        users       = _load_users()
-        caller_name = users.get(email or '', {}).get('name') or (email or 'Someone').split('@')[0].capitalize()
-        push_title  = f'📹 {caller_name} wants a video call!'
-        push_body   = 'Tap to join'
-
-    print(f'=== VIDEO PUSH FIRING: title="{push_title}" url={room_url} ===')
-    try:
-        import requests as _r2
-        resp = _r2.post(
-            'https://onesignal.com/api/v1/notifications',
-            headers={
-                'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
-                'Content-Type':  'application/json',
-            },
-            json={
-                'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
-                'included_segments': ['All'],
-                'headings':          {'en': push_title},
-                'contents':          {'en': push_body},
-                'url':               room_url,
-                'ios_sound':         'default',
-            },
-            timeout=5,
-        )
-        print(f'=== ONESIGNAL VIDEO: {resp.status_code} {resp.text[:200]} ===')
-    except Exception as e:
-        print(f'=== ONESIGNAL VIDEO ERROR: {e} ===')
+    if is_admin and chat_id.startswith('dm:'):
+        # Jeff is calling a specific member — target them directly
+        target_email = chat_id[3:]
+        _push_to_member(target_email,
+                        '📹 Jeff is calling you!',
+                        'Tap to join the video call',
+                        'video_call')
 
     return jsonify({'url': room_url, 'room': room_name})
 
@@ -2176,29 +2187,16 @@ def api_post_message():
 
     msg = _post_and_broadcast(chat_id, email, sender_name, content, is_admin)
 
-    # Push notification — inline, no functions, fires when Jeff/admin sends
-    print(f"=== API POST MESSAGE HIT === is_admin={is_admin} chat={chat_id}")
+    # Push notification — targeted to DM recipient or broadcast for group chats
     if is_admin:
-        try:
-            import requests as _r
-            resp = _r.post(
-                'https://onesignal.com/api/v1/notifications',
-                headers={
-                    'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
-                    'Content-Type':  'application/json',
-                },
-                json={
-                    'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
-                    'included_segments': ['All'],
-                    'headings':          {'en': '💬 New message from Jeff'},
-                    'contents':          {'en': content[:100]},
-                    'ios_sound':         'default',
-                },
-                timeout=5,
-            )
-            print(f'=== ONESIGNAL API: {resp.status_code} {resp.text[:200]} ===')
-        except Exception as e:
-            print(f'=== ONESIGNAL API ERROR: {e} ===')
+        if chat == 'dm':
+            _push_to_member(member_id,
+                            '💬 New message from Jeff',
+                            content[:100],
+                            'dm')
+        else:
+            # Group chat — broadcast to all members
+            _fire_onesignal('💬 New message from Jeff', content[:100])
 
     return jsonify({'message': msg})
 
@@ -2264,23 +2262,10 @@ def admin_messages_dm(member_email):
         content = request.form.get('content', '').strip()
         if content and len(content) <= 2000:
             _post_and_broadcast(dm_key, JEFF_EMAIL, 'Jeff', content, True)
-            try:
-                import requests as _r
-                resp = _r.post(
-                    'https://onesignal.com/api/v1/notifications',
-                    headers={'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq', 'Content-Type': 'application/json'},
-                    json={
-                        'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
-                        'included_segments': ['All'],
-                        'headings':          {'en': '💬 New message from Jeff'},
-                        'contents':          {'en': content[:100]},
-                        'ios_sound':         'default',
-                    },
-                    timeout=5,
-                )
-                print(f'=== ONESIGNAL DM: {resp.status_code} {resp.text[:200]} ===')
-            except Exception as e:
-                print(f'=== ONESIGNAL DM ERROR: {e} ===')
+            _push_to_member(member_email,
+                            '💬 New message from Jeff',
+                            content[:100],
+                            'dm')
         return redirect(url_for('admin_messages_dm', member_email=member_email))
     msgs = _get_messages(dm_key)
     _mark_read('__admin__', dm_key)
@@ -2307,23 +2292,7 @@ def admin_messages_chat(chat_id):
         content = request.form.get('content', '').strip()
         if content and len(content) <= 2000:
             _post_and_broadcast(chat_id, JEFF_EMAIL, 'Jeff', content, True)
-            try:
-                import requests as _r
-                resp = _r.post(
-                    'https://onesignal.com/api/v1/notifications',
-                    headers={'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq', 'Content-Type': 'application/json'},
-                    json={
-                        'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
-                        'included_segments': ['All'],
-                        'headings':          {'en': '💬 New message from Jeff'},
-                        'contents':          {'en': content[:100]},
-                        'ios_sound':         'default',
-                    },
-                    timeout=5,
-                )
-                print(f'=== ONESIGNAL CHAT: {resp.status_code} {resp.text[:200]} ===')
-            except Exception as e:
-                print(f'=== ONESIGNAL CHAT ERROR: {e} ===')
+            _fire_onesignal('💬 New message from Jeff', content[:100])
         return redirect(url_for('admin_messages_chat', chat_id=chat_id))
     msgs = _get_messages(chat_id)
     _mark_read('__admin__', chat_id)
@@ -2366,27 +2335,12 @@ def admin_api_send():
     jeff_email = session.get('user_email', JEFF_EMAIL)
     msg = _post_and_broadcast(chat_id, jeff_email, 'Jeff', content, True)
 
-    # Push notification — inline, full response logged
-    import requests
-    try:
-        response = requests.post(
-            'https://onesignal.com/api/v1/notifications',
-            headers={
-                'Authorization': 'Basic os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq',
-                'Content-Type':  'application/json',
-            },
-            json={
-                'app_id':            '83f97781-4adb-423b-b6d2-d0c079ee5877',
-                'included_segments': ['All'],
-                'headings':          {'en': '💬 New message from Jeff'},
-                'contents':          {'en': content[:100]},
-                'ios_sound':         'default',
-            },
-            timeout=5,
-        )
-        print(f'OneSignal response: {response.status_code} {response.text}')
-    except Exception as e:
-        print(f'OneSignal error: {e}')
+    # Push notification — targeted for DM, broadcast for group chats
+    if chat_id.startswith('dm:'):
+        target_email = chat_id[3:]
+        _push_to_member(target_email, '💬 New message from Jeff', content[:100], 'dm')
+    else:
+        _fire_onesignal('💬 New message from Jeff', content[:100])
 
     return jsonify({'message': msg})
 
@@ -3235,6 +3189,26 @@ def api_whoami():
         'user_name':  session.get('user_name', None),
         'is_admin':   bool(session.get('is_admin')),
     })
+
+
+@app.route('/api/register-device', methods=['POST'])
+def api_register_device():
+    """iOS app calls this after login to store the OneSignal player_id for the user,
+    enabling targeted push notifications instead of broadcast-to-all."""
+    data      = request.get_json(silent=True) or {}
+    email     = (data.get('email') or '').strip().lower()
+    token     = (data.get('token') or '').strip()
+    player_id = (data.get('player_id') or '').strip()
+    if not email or not token or not player_id:
+        return jsonify({'ok': False, 'error': 'missing fields'}), 400
+    users = _load_users()
+    user  = users.get(email)
+    if not user or user.get('ios_token') != token:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+    users[email]['onesignal_player_id'] = player_id
+    _save_users(users)
+    print(f'[DEVICE] registered {email} → {player_id}')
+    return jsonify({'ok': True})
 
 
 @app.route('/api/online-users')
