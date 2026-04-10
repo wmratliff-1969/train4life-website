@@ -744,14 +744,17 @@ def _send_onesignal_push_msg(heading, body_text, segment='All', filters=None):
     _fire_onesignal(heading, body_text)
 
 
-def _send_apns_push(device_token, title, body, extra_data=None):
+def _send_apns_push(device_token, title, body, extra_data=None, notif_type='message'):
     """Send a push notification directly via APNs HTTP/2 using .p8 JWT auth.
-    Requires APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_KEY env vars."""
+    Requires APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_KEY env vars.
+    Set APNS_SANDBOX=true for Xcode development builds (uses sandbox endpoint).
+    """
     key_id    = os.environ.get('APNS_KEY_ID', '').strip()
     team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
     bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
     # APNS_KEY is the full .p8 PEM content; Render may store \n literally
     key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
+    sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
     if not all([key_id, team_id, bundle_id, key_pem, device_token]):
         print(f'[APNs] missing config or token, skipping')
         return
@@ -768,27 +771,31 @@ def _send_apns_push(device_token, title, body, extra_data=None):
         algorithm='ES256',
         headers={'kid': key_id},
     )
-    payload = {
-        'aps': {
-            'alert': {'title': title, 'body': body},
-            'sound': 'default',
-        }
+    aps = {
+        'alert': {'title': title, 'body': body},
+        'sound': 'default',
+        # Wake the app in the background so it can update state
+        'content-available': 1,
     }
+    payload = {'aps': aps}
     if extra_data:
         payload.update(extra_data)
+    host = 'api.sandbox.push.apple.com' if sandbox else 'api.push.apple.com'
     headers = {
-        'authorization':  f'bearer {token}',
-        'apns-push-type': 'alert',
-        'apns-topic':     bundle_id,
-        'apns-priority':  '10',
+        'authorization':   f'bearer {token}',
+        'apns-push-type':  'alert',
+        'apns-topic':      bundle_id,
+        'apns-priority':   '10',
+        # Store notification for up to 24 h if device is unreachable
+        'apns-expiration': str(now + 86400),
     }
-    url = f'https://api.push.apple.com/3/device/{device_token}'
+    url = f'https://{host}/3/device/{device_token}'
     try:
         with httpx.Client(http2=True, timeout=10) as client:
             resp = client.post(url, json=payload, headers=headers)
-        print(f'[APNs] → {device_token[:20]}... status={resp.status_code}')
+        print(f'[APNs] {"sandbox" if sandbox else "prod"} → {device_token[:20]}... status={resp.status_code}')
         if resp.status_code != 200:
-            print(f'[APNs] error: {resp.text}')
+            print(f'[APNs] error body: {resp.text}')
     except Exception as e:
         print(f'[APNs] send error: {e}')
 
