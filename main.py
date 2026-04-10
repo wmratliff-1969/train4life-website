@@ -744,37 +744,98 @@ def _send_onesignal_push_msg(heading, body_text, segment='All', filters=None):
     _fire_onesignal(heading, body_text)
 
 
-def _push_to_member(email, title, body, notif_type):
-    """Send a targeted OneSignal push to a specific member via their stored player_id.
-    If no player_id is registered yet, skips silently (avoids notifying everyone).
-    Runs in a background thread so it never blocks a request."""
-    users     = _load_users()
-    player_id = users.get(email, {}).get('onesignal_player_id', '').strip()
-    if not player_id:
-        print(f'[PUSH] no player_id for {email}, skipping')
+def _send_apns_push(device_token, title, body, extra_data=None):
+    """Send a push notification directly via APNs HTTP/2 using .p8 JWT auth.
+    Requires APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_KEY env vars."""
+    key_id    = os.environ.get('APNS_KEY_ID', '').strip()
+    team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
+    bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
+    # APNS_KEY is the full .p8 PEM content; Render may store \n literally
+    key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
+    if not all([key_id, team_id, bundle_id, key_pem, device_token]):
+        print(f'[APNs] missing config or token, skipping')
         return
-    api_key = os.environ.get('ONESIGNAL_API_KEY',
-        'os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq')
-    app_id  = os.environ.get('ONESIGNAL_APP_ID', '83f97781-4adb-423b-b6d2-d0c079ee5877')
+    try:
+        import jwt as pyjwt
+        import httpx
+    except ImportError as e:
+        print(f'[APNs] missing dependency: {e}')
+        return
+    now   = int(time.time())
+    token = pyjwt.encode(
+        {'iss': team_id, 'iat': now},
+        key_pem,
+        algorithm='ES256',
+        headers={'kid': key_id},
+    )
     payload = {
-        'app_id':             app_id,
-        'include_player_ids': [player_id],
-        'headings':           {'en': title},
-        'contents':           {'en': body},
-        'ios_sound':          'default',
-        'data':               {'type': notif_type},
+        'aps': {
+            'alert': {'title': title, 'body': body},
+            'sound': 'default',
+        }
     }
+    if extra_data:
+        payload.update(extra_data)
+    headers = {
+        'authorization':  f'bearer {token}',
+        'apns-push-type': 'alert',
+        'apns-topic':     bundle_id,
+        'apns-priority':  '10',
+    }
+    url = f'https://api.push.apple.com/3/device/{device_token}'
+    try:
+        with httpx.Client(http2=True, timeout=10) as client:
+            resp = client.post(url, json=payload, headers=headers)
+        print(f'[APNs] → {device_token[:20]}... status={resp.status_code}')
+        if resp.status_code != 200:
+            print(f'[APNs] error: {resp.text}')
+    except Exception as e:
+        print(f'[APNs] send error: {e}')
+
+
+def _push_to_member(email, title, body, notif_type):
+    """Send a targeted push to a specific member.
+    Uses APNs directly if apns_device_token is stored; falls back to OneSignal.
+    Runs in a background thread so it never blocks a request."""
+    users      = _load_users()
+    user       = users.get(email, {})
+    apns_token = user.get('apns_device_token', '').strip()
+    player_id  = user.get('onesignal_player_id', '').strip()
+
+    if not apns_token and not player_id:
+        print(f'[PUSH] no push token for {email}, skipping')
+        return
+
+    extra_data = {'data': {'type': notif_type}}
+
     def _send():
+        # ── APNs (primary) ────────────────────────────────────────────
+        if apns_token:
+            _send_apns_push(apns_token, title, body, extra_data)
+            return   # APNs succeeded (or failed silently); don't double-notify
+        # ── OneSignal (fallback if no APNs token yet) ─────────────────
+        api_key = os.environ.get('ONESIGNAL_API_KEY',
+            'os_v2_app_qp4xpakk3nbdxnws2daht3syo7rialml4xnu26fn25hkmirrb7lhwtdkc7trtob66lt24iqidvhr644pgiochwchlgrlmkc7fp62fvq')
+        app_id  = os.environ.get('ONESIGNAL_APP_ID', '83f97781-4adb-423b-b6d2-d0c079ee5877')
+        onesignal_payload = {
+            'app_id':             app_id,
+            'include_player_ids': [player_id],
+            'headings':           {'en': title},
+            'contents':           {'en': body},
+            'ios_sound':          'default',
+            'data':               {'type': notif_type},
+        }
         try:
             import requests as _rp
             resp = _rp.post(
                 'https://onesignal.com/api/v1/notifications',
                 headers={'Authorization': f'Basic {api_key}', 'Content-Type': 'application/json'},
-                json=payload, timeout=5,
+                json=onesignal_payload, timeout=5,
             )
-            print(f'[PUSH] {notif_type} → {email}: {resp.status_code} {resp.text[:120]}')
+            print(f'[PUSH/OneSignal] {notif_type} → {email}: {resp.status_code} {resp.text[:120]}')
         except Exception as e:
-            print(f'[PUSH] error sending to {email}: {e}')
+            print(f'[PUSH/OneSignal] error sending to {email}: {e}')
+
     threading.Thread(target=_send, daemon=True).start()
 
 
@@ -3283,21 +3344,29 @@ def api_whoami():
 
 @app.route('/api/register-device', methods=['POST'])
 def api_register_device():
-    """iOS app calls this after login to store the OneSignal player_id for the user,
-    enabling targeted push notifications instead of broadcast-to-all."""
-    data      = request.get_json(silent=True) or {}
-    email     = (data.get('email') or '').strip().lower()
-    token     = (data.get('token') or '').strip()
-    player_id = (data.get('player_id') or '').strip()
-    if not email or not token or not player_id:
+    """iOS app calls this after login to store push tokens.
+    Accepts apns_token (raw APNs hex token, primary) and player_id (OneSignal, fallback).
+    At least one push token is required."""
+    data       = request.get_json(silent=True) or {}
+    email      = (data.get('email')      or '').strip().lower()
+    token      = (data.get('token')      or '').strip()
+    apns_token = (data.get('apns_token') or '').strip()
+    player_id  = (data.get('player_id') or '').strip()
+    if not email or not token:
         return jsonify({'ok': False, 'error': 'missing fields'}), 400
+    if not apns_token and not player_id:
+        return jsonify({'ok': False, 'error': 'missing push token'}), 400
     users = _load_users()
     user  = users.get(email)
     if not user or user.get('ios_token') != token:
         return jsonify({'ok': False, 'error': 'unauthorized'}), 401
-    users[email]['onesignal_player_id'] = player_id
+    if apns_token:
+        users[email]['apns_device_token'] = apns_token
+        print(f'[DEVICE] APNs token registered {email} → {apns_token[:20]}...')
+    if player_id:
+        users[email]['onesignal_player_id'] = player_id
+        print(f'[DEVICE] OneSignal player_id registered {email} → {player_id}')
     _save_users(users)
-    print(f'[DEVICE] registered {email} → {player_id}')
     return jsonify({'ok': True})
 
 

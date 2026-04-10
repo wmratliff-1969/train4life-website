@@ -5,3 +5,6 @@ stripe
 requests
 flask-socketio
 eventlet
+httpx[http2]
+PyJWT
+cryptography
