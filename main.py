@@ -3126,15 +3126,17 @@ if _SIO_OK and socketio:
             # When a member calls, also ping the admin's global toast (any admin page)
             if not session.get('is_admin'):
                 socketio.emit('call_invite', payload, to='call:admin')
-            # HTTP fallback: store pending call so member can poll /api/incoming-call
-            # Works even when WKWebView SocketIO connection isn't established
+            # HTTP fallback: store/update pending call so member can poll /api/incoming-call
+            # Works even when WKWebView SocketIO connection isn't established.
+            # If admin_members already POSTed a pending call, update from_sid with real SID.
             if chat_id.startswith('dm:'):
                 member_email = chat_id[3:].lower()
+                existing = _pending_calls.get(member_email)
                 _pending_calls[member_email] = {
                     'caller_name': caller_name,
-                    'from_sid':   request.sid,
-                    'chat_id':    chat_id,
-                    'expires_at': time.time() + 30,
+                    'from_sid':    request.sid,
+                    'chat_id':     chat_id,
+                    'expires_at':  time.time() + 30,
                 }
 
     @socketio.on('call_accept')
@@ -3226,17 +3228,35 @@ def api_ping_online():
 @app.route('/api/incoming-call', methods=['GET', 'POST'])
 def api_incoming_call():
     """HTTP fallback for incoming call notification.
-    GET  — returns pending call info for the logged-in member (or null).
-    POST — member accepted or declined; clears the pending call.
-    Ensures the incoming call popup appears even when WKWebView SocketIO fails.
+    GET  — member polls; returns pending call for the logged-in user (or null).
+    POST (admin) — Jeff stores a pending call: {email, caller_name}.
+    POST (member) — member accepted/declined; clears their own pending call.
+    Ensures the popup appears even when WKWebView SocketIO fails.
     """
     if not session.get('logged_in'):
         return jsonify({'call': None})
-    email = (session.get('user_email') or '').lower()
     if request.method == 'POST':
-        _pending_calls.pop(email, None)
-        return jsonify({'ok': True})
-    call = _pending_calls.get(email)
+        data = request.get_json(silent=True) or {}
+        if session.get('is_admin'):
+            # Jeff is storing a pending call for a member
+            target_email  = (data.get('email') or '').strip().lower()
+            caller_name   = (data.get('caller_name') or 'Jeff').strip()
+            if target_email:
+                _pending_calls[target_email] = {
+                    'caller_name': caller_name,
+                    'from_sid':    None,   # SocketIO SID not available here; set later by socket
+                    'chat_id':     f'dm:{target_email}',
+                    'expires_at':  time.time() + 30,
+                }
+            return jsonify({'ok': True})
+        else:
+            # Member clearing their own pending call (accepted or declined)
+            email = (session.get('user_email') or '').lower()
+            _pending_calls.pop(email, None)
+            return jsonify({'ok': True})
+    # GET — member polls for a pending call
+    email = (session.get('user_email') or '').lower()
+    call  = _pending_calls.get(email)
     if not call:
         return jsonify({'call': None})
     if call['expires_at'] < time.time():
