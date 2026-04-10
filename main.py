@@ -2392,6 +2392,33 @@ def admin_dashboard():
                            revenue=None)
 
 
+@app.route('/admin/members')
+@_admin_required
+def admin_members():
+    users = _load_users()
+    # Exclude admin/Jeff accounts
+    admin_emails = {'jeff@train4life.life', 'wmratliff@gmail.com', JEFF_EMAIL}
+    members = []
+    for email, u in users.items():
+        if email.lower() in admin_emails:
+            continue
+        raw_date = u.get('created_at', '')
+        try:
+            from datetime import datetime as _dt
+            joined = _dt.fromisoformat(raw_date.replace('Z', '+00:00')).strftime('%b %d, %Y')
+        except Exception:
+            joined = raw_date[:10] if raw_date else '—'
+        plan = (u.get('plan') or 'free').strip() or 'free'
+        members.append({
+            'email':  email,
+            'name':   u.get('name') or email.split('@')[0].capitalize(),
+            'joined': joined,
+            'plan':   plan,
+        })
+    members.sort(key=lambda m: m['joined'], reverse=True)
+    return render_template('admin_members.html', members=members)
+
+
 @app.route('/admin/live', methods=['GET', 'POST'])
 @_admin_required
 def admin_live():
