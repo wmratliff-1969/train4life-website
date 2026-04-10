@@ -244,15 +244,15 @@ var _mode = new URLSearchParams(window.location.search).get('mode') || '';
 
 /* ── Store pending call server-side then navigate ── */
 function storeAndCall(email, name) {
-  // POST to store pending call for HTTP polling fallback on member's device
+  // Fire-and-forget: store pending call for HTTP polling fallback on member's device
   fetch('/api/incoming-call', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email, caller_name: 'Jeff' }),
     credentials: 'same-origin'
-  }).catch(function() {}).finally(function() {
-    window.location.href = '/admin/messages/dm/' + encodeURIComponent(email) + '?call=1';
-  });
+  }).catch(function() {});
+  // Navigate immediately — do not wait for fetch
+  window.location.href = '/admin/messages/dm/' + encodeURIComponent(email) + '?call=1';
 }
 
 /* ── Video Call button click (default mode) ── */
