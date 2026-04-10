@@ -755,14 +755,18 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
     # APNS_KEY is the full .p8 PEM content; Render may store \n literally
     key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
     sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
+
+    print(f'[APNs] config: key_id={key_id!r} team_id={team_id!r} bundle_id={bundle_id!r} sandbox={sandbox} key_pem_len={len(key_pem)} token_len={len(device_token)}')
+
     if not all([key_id, team_id, bundle_id, key_pem, device_token]):
-        print(f'[APNs] missing config or token, skipping')
+        missing = [k for k, v in [('key_id', key_id), ('team_id', team_id), ('bundle_id', bundle_id), ('key_pem', key_pem), ('device_token', device_token)] if not v]
+        print(f'[APNs] ❌ missing config: {missing} — skipping')
         return
     try:
         import jwt as pyjwt
         import httpx
     except ImportError as e:
-        print(f'[APNs] missing dependency: {e}')
+        print(f'[APNs] ❌ missing dependency: {e}')
         return
     now   = int(time.time())
     token = pyjwt.encode(
@@ -771,33 +775,38 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
         algorithm='ES256',
         headers={'kid': key_id},
     )
+    # alert push — do NOT include content-available here.
+    # Apple docs: "This key shouldn't be combined with the apns-push-type value of alert."
+    # Mixing content-available:1 with alert can cause iOS to throttle or misclassify
+    # the notification when the app is backgrounded or the screen is locked.
     aps = {
         'alert': {'title': title, 'body': body},
         'sound': 'default',
-        # Wake the app in the background so it can update state
-        'content-available': 1,
+        'badge': 1,
     }
     payload = {'aps': aps}
     if extra_data:
         payload.update(extra_data)
     host = 'api.sandbox.push.apple.com' if sandbox else 'api.push.apple.com'
+    url  = f'https://{host}/3/device/{device_token}'
     headers = {
         'authorization':   f'bearer {token}',
         'apns-push-type':  'alert',
-        'apns-topic':      bundle_id,
+        'apns-topic':      bundle_id,   # must be exact bundle ID: life.train4life.app
         'apns-priority':   '10',
-        # Store notification for up to 24 h if device is unreachable
         'apns-expiration': str(now + 86400),
     }
-    url = f'https://{host}/3/device/{device_token}'
+    print(f'[APNs] sending alert to {url[:60]}... topic={bundle_id!r}')
     try:
         with httpx.Client(http2=True, timeout=10) as client:
             resp = client.post(url, json=payload, headers=headers)
-        print(f'[APNs] {"sandbox" if sandbox else "prod"} → {device_token[:20]}... status={resp.status_code}')
-        if resp.status_code != 200:
-            print(f'[APNs] error body: {resp.text}')
+        if resp.status_code == 200:
+            print(f'[APNs] ✅ delivered — apns-id={resp.headers.get("apns-id", "?")}')
+        else:
+            reason = resp.json().get('reason', resp.text) if resp.text else 'unknown'
+            print(f'[APNs] ❌ status={resp.status_code} reason={reason!r} token={device_token[:20]}...')
     except Exception as e:
-        print(f'[APNs] send error: {e}')
+        print(f'[APNs] ❌ send error: {e}')
 
 
 def _push_to_member(email, title, body, notif_type, extra=None):
