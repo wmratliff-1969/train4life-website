@@ -1607,75 +1607,108 @@
   <script>
   (function() {
     var memberEmail = {{ session.get('user_email', '')|tojson }};
-    var pendingFrom = null;
-    var socket = io();
 
-    socket.on('connect', function() {
-      socket.emit('user_online');
-      // Join personal DM call room so Jeff can reach this member from any page
-      socket.emit('join_call_room', { chat_id: 'dm:' + memberEmail });
-    });
+    // Shared pending call state — set by SocketIO OR HTTP poll, whichever fires first
+    window._gctPending = null;  // { from: sid, callerName: str }
 
-    // Heartbeat every 30 s
-    setInterval(function() { socket.emit('user_heartbeat'); }, 30000);
-
-    // Incoming call from Jeff — show toast instantly on any page
-    socket.on('call_invite', function(data) {
-      if (window._callHandledByPage) return;  // page has its own call UI
-      pendingFrom = data.from;
-      var caller = document.getElementById('gct-caller');
-      if (caller) caller.textContent = data.caller_name || 'Jeff';
+    function showCallToast(callerName) {
+      var el = document.getElementById('gct-caller');
+      if (el) el.textContent = callerName || 'Jeff';
       document.getElementById('global-call-toast').style.display = 'block';
-    });
+    }
 
-    // Accept: start call in-place, no navigation needed
+    // ── HTTP fallback polling (works even if SocketIO fails in WKWebView) ──
+    setInterval(function() {
+      if (window._gctPending || window._callHandledByPage) return;
+      fetch('/api/incoming-call', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.call || window._gctPending || window._callHandledByPage) return;
+          window._gctPending = { from: data.call.from_sid, callerName: data.call.caller_name };
+          showCallToast(data.call.caller_name);
+        }).catch(function() {});
+    }, 3000);
+
+    // ── SocketIO (primary path for browser, fallback for WKWebView) ──
+    var socket = null;
+    try { socket = io(); } catch(e) {}
+    if (socket) {
+      socket.on('connect', function() {
+        socket.emit('user_online');
+        socket.emit('join_call_room', { chat_id: 'dm:' + memberEmail });
+      });
+
+      setInterval(function() { if (socket.connected) socket.emit('user_heartbeat'); }, 30000);
+
+      socket.on('call_invite', function(data) {
+        if (window._callHandledByPage || window._gctPending) return;
+        window._gctPending = { from: data.from, callerName: data.caller_name || 'Jeff' };
+        showCallToast(window._gctPending.callerName);
+      });
+
+      socket.on('call_offer', async function(data) {
+        var s = window._gblState;
+        if (!s.remoteSid || window._callHandledByPage) return;
+        s.remoteSid = data.from;
+        try {
+          s.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          var lv = document.getElementById('gbl-local');
+          if (lv) { lv.srcObject = s.localStream; lv.style.display = 'block'; lv.play().catch(function(){}); }
+          s.pc = window._gblBuildPC(socket, s.remoteSid);
+          s.localStream.getTracks().forEach(function(t) { s.pc.addTrack(t, s.localStream); });
+          await s.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+          var answer = await s.pc.createAnswer();
+          await s.pc.setLocalDescription(answer);
+          socket.emit('call_answer', { to: s.remoteSid, answer: answer });
+        } catch(err) {
+          var st = document.getElementById('gbl-status');
+          if (st) st.textContent = 'Camera error: ' + err.message;
+        }
+      });
+
+      socket.on('call_ice', function(data) {
+        var s = window._gblState;
+        if (s.pc && data.candidate && !window._callHandledByPage) {
+          s.pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
+        }
+      });
+
+      socket.on('call_end', function() {
+        if (!window._callHandledByPage) window._gblEnd();
+      });
+    }
+
+    // ── Accept button ──
     document.getElementById('gct-accept').addEventListener('click', async function() {
       document.getElementById('global-call-toast').style.display = 'none';
-      if (!pendingFrom) return;
-      var s = window._gblState;
-      s.socket    = socket;
-      s.remoteSid = pendingFrom;
-      s.chatId    = 'dm:' + memberEmail;
-      pendingFrom = null;
-      socket.emit('call_accept', { to: s.remoteSid });
-      window._gblShow(document.getElementById('gct-caller').textContent);
+      var pending = window._gctPending;
+      window._gctPending = null;
+      if (!pending) return;
+      // Clear server-side pending call
+      fetch('/api/incoming-call', { method: 'POST', credentials: 'same-origin' }).catch(function(){});
+      // Start call via SocketIO if connected
+      if (socket && socket.connected) {
+        var s = window._gblState;
+        s.socket    = socket;
+        s.remoteSid = pending.from;
+        s.chatId    = 'dm:' + memberEmail;
+        socket.emit('call_accept', { to: pending.from });
+        window._gblShow(pending.callerName);
+      }
     });
 
+    // ── Decline button ──
     document.getElementById('gct-decline').addEventListener('click', function() {
       document.getElementById('global-call-toast').style.display = 'none';
-      if (pendingFrom) socket.emit('call_decline', { to: pendingFrom });
-      pendingFrom = null;
-    });
-
-    // Callee: receive offer from Jeff, complete WebRTC handshake
-    socket.on('call_offer', async function(data) {
-      var s = window._gblState;
-      if (!s.remoteSid || window._callHandledByPage) return;
-      s.remoteSid = data.from;
-      try {
-        s.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        var lv = document.getElementById('gbl-local');
-        if (lv) { lv.srcObject = s.localStream; lv.style.display = 'block'; lv.play().catch(function(){}); }
-        s.pc = window._gblBuildPC(socket, s.remoteSid);
-        s.localStream.getTracks().forEach(function(t) { s.pc.addTrack(t, s.localStream); });
-        await s.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-        var answer = await s.pc.createAnswer();
-        await s.pc.setLocalDescription(answer);
-        socket.emit('call_answer', { to: s.remoteSid, answer: answer });
-      } catch(err) {
-        document.getElementById('gbl-status').textContent = 'Camera error: ' + err.message;
+      var pending = window._gctPending;
+      window._gctPending = null;
+      if (!pending) return;
+      // Clear server-side pending call
+      fetch('/api/incoming-call', { method: 'POST', credentials: 'same-origin' }).catch(function(){});
+      // Notify caller via SocketIO if connected
+      if (socket && socket.connected) {
+        socket.emit('call_decline', { to: pending.from });
       }
-    });
-
-    socket.on('call_ice', function(data) {
-      var s = window._gblState;
-      if (s.pc && data.candidate && !window._callHandledByPage) {
-        s.pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
-      }
-    });
-
-    socket.on('call_end', function() {
-      if (!window._callHandledByPage) window._gblEnd();
     });
   })();
   </script>

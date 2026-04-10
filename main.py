@@ -40,6 +40,7 @@ _sio_viewers          = {}     # sid -> {email, name}
 _sio_broadcast_token  = None   # short-lived token issued at /admin/live page load
 _online_users         = {}     # sid -> {email, name, last_seen} — socket-connected members
 _http_online          = {}     # email -> {name, last_seen}  — HTTP-ping-based presence (app + web)
+_pending_calls        = {}     # member_email -> {caller_name, from_sid, chat_id, expires_at}
 
 import markupsafe
 @app.template_filter('linkify')
@@ -3125,6 +3126,16 @@ if _SIO_OK and socketio:
             # When a member calls, also ping the admin's global toast (any admin page)
             if not session.get('is_admin'):
                 socketio.emit('call_invite', payload, to='call:admin')
+            # HTTP fallback: store pending call so member can poll /api/incoming-call
+            # Works even when WKWebView SocketIO connection isn't established
+            if chat_id.startswith('dm:'):
+                member_email = chat_id[3:].lower()
+                _pending_calls[member_email] = {
+                    'caller_name': caller_name,
+                    'from_sid':   request.sid,
+                    'chat_id':    chat_id,
+                    'expires_at': time.time() + 30,
+                }
 
     @socketio.on('call_accept')
     def _sio_call_accept(data):
@@ -3132,6 +3143,9 @@ if _SIO_OK and socketio:
         to = data.get('to')
         if to:
             socketio.emit('call_accept', {'from': request.sid}, to=to)
+        # Clear any pending call stored for HTTP polling
+        email = (session.get('user_email') or '').lower()
+        _pending_calls.pop(email, None)
 
     @socketio.on('call_decline')
     def _sio_call_decline(data):
@@ -3139,6 +3153,9 @@ if _SIO_OK and socketio:
         to = data.get('to')
         if to:
             socketio.emit('call_decline', {}, to=to)
+        # Clear any pending call stored for HTTP polling
+        email = (session.get('user_email') or '').lower()
+        _pending_calls.pop(email, None)
 
     @socketio.on('call_offer')
     def _sio_call_offer(data):
@@ -3204,6 +3221,32 @@ def api_ping_online():
     with _sio_lock:
         _http_online[email] = {'name': name, 'last_seen': time.time()}
     return jsonify({'ok': True, 'email': email})
+
+
+@app.route('/api/incoming-call', methods=['GET', 'POST'])
+def api_incoming_call():
+    """HTTP fallback for incoming call notification.
+    GET  — returns pending call info for the logged-in member (or null).
+    POST — member accepted or declined; clears the pending call.
+    Ensures the incoming call popup appears even when WKWebView SocketIO fails.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'call': None})
+    email = (session.get('user_email') or '').lower()
+    if request.method == 'POST':
+        _pending_calls.pop(email, None)
+        return jsonify({'ok': True})
+    call = _pending_calls.get(email)
+    if not call:
+        return jsonify({'call': None})
+    if call['expires_at'] < time.time():
+        _pending_calls.pop(email, None)
+        return jsonify({'call': None})
+    return jsonify({'call': {
+        'caller_name': call['caller_name'],
+        'from_sid':    call['from_sid'],
+        'chat_id':     call['chat_id'],
+    }})
 
 
 @app.route('/api/whoami')
