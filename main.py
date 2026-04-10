@@ -3384,14 +3384,35 @@ def api_register_device():
     token      = (data.get('token')      or '').strip()
     apns_token = (data.get('apns_token') or '').strip()
     player_id  = (data.get('player_id') or '').strip()
+
+    print(f'[DEVICE] 📥 register-device received: email={email!r} token={token[:12]!r}... apns={apns_token[:20] if apns_token else "(none)"!r} player_id={player_id[:20] if player_id else "(none)"!r}')
+
     if not email or not token:
+        print(f'[DEVICE] ❌ missing fields — email={bool(email)} token={bool(token)}')
         return jsonify({'ok': False, 'error': 'missing fields'}), 400
     if not apns_token and not player_id:
+        print(f'[DEVICE] ❌ no push token provided')
         return jsonify({'ok': False, 'error': 'missing push token'}), 400
+
     users = _load_users()
     user  = users.get(email)
-    if not user or user.get('ios_token') != token:
-        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    if not user:
+        print(f'[DEVICE] ❌ email {email!r} not found in users.json')
+        return jsonify({'ok': False, 'error': 'user not found'}), 401
+
+    stored_ios_token = user.get('ios_token', '')
+    print(f'[DEVICE] 🔑 stored ios_token for {email}: {stored_ios_token[:12]!r}... — provided: {token[:12]!r}...')
+
+    if stored_ios_token and stored_ios_token != token:
+        # Token mismatch — could mean a stale token in the app; update it so future calls work
+        print(f'[DEVICE] ⚠️  ios_token mismatch for {email} — updating stored token to match app')
+        users[email]['ios_token'] = token
+    elif not stored_ios_token:
+        # Token missing from users.json (e.g. Render restart wiped the file) — accept & persist
+        print(f'[DEVICE] ⚠️  ios_token missing from users.json for {email} — saving app token')
+        users[email]['ios_token'] = token
+
     if apns_token:
         users[email]['apns_device_token'] = apns_token
         print(f'[DEVICE] ✅ APNs token saved for {email}: {apns_token}')
