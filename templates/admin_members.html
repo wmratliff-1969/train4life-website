@@ -17,6 +17,15 @@
   .mem-search:focus { border-color: #CC0000; box-shadow: 0 0 0 3px rgba(204,0,0,0.08); }
   .mem-count { font-size: 0.8rem; color: #71717a; }
 
+  /* ── Mode banner ── */
+  .mode-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+    padding: 10px 16px; margin-bottom: 18px;
+    font-size: 0.85rem; font-weight: 600; color: #15803d;
+  }
+  .mode-banner.call-mode { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
   /* ── Online pill ── */
   .online-pill {
     display: inline-flex; align-items: center; gap: 5px;
@@ -40,6 +49,12 @@
   .mem-table tr:last-child td { border-bottom: none; }
   .mem-table tr:hover td { background: #fafafa; }
 
+  /* ── Picker-mode row (entire row is the action) ── */
+  .mem-row.picker-active { cursor: pointer; }
+  .mem-row.picker-active:hover td { background: #f0fdf4; }
+  .mem-row.picker-offline td { opacity: 0.35; }
+  .mem-row.picker-offline { cursor: default !important; }
+
   /* ── Avatar ── */
   .mem-avatar {
     width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
@@ -61,7 +76,7 @@
   .plan-express { background: #ffedd5; color: #c2410c; }
   .plan-free    { background: #f4f4f5; color: #71717a; }
 
-  /* ── Action buttons ── */
+  /* ── Action buttons (default mode only) ── */
   .btn-msg {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 6px 13px; border-radius: 7px; font-size: 0.78rem; font-weight: 700;
@@ -85,6 +100,7 @@
   .btn-call.online:hover { background: #bbf7d0; }
 
   .actions-cell { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .pick-arrow { color: #9ca3af; font-size: 1rem; }
 
   /* ── Empty state ── */
   .mem-empty { text-align: center; padding: 60px 20px; color: #a1a1aa; font-size: 0.9rem; }
@@ -94,10 +110,13 @@
 {% block body %}
 <div class="a-page">
   <div class="a-page-header">
-    <div class="a-breadcrumb"><a href="/admin/dashboard">Dashboard</a> / Members</div>
-    <h1>Members</h1>
-    <p>All registered members — message anytime, call when they're online.</p>
+    <div class="a-breadcrumb"><a href="/admin/dashboard">Dashboard</a> / <a href="/admin/members">Members</a></div>
+    <h1 id="page-title">Members</h1>
+    <p id="page-desc">All registered members — message anytime, call when they're online.</p>
   </div>
+
+  <!-- Mode banner (shown in picker modes) -->
+  <div id="mode-banner" style="display:none;" class="mode-banner"></div>
 
   <div class="a-card">
     <div class="mem-search-wrap">
@@ -112,7 +131,7 @@
           <th>Member</th>
           <th>Plan</th>
           <th>Joined</th>
-          <th>Actions</th>
+          <th id="actions-header">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -136,13 +155,18 @@
             <span class="plan-badge plan-{{ m.plan }}">{{ m.plan }}</span>
           </td>
           <td style="font-size:0.82rem;color:#52525b;">{{ m.joined }}</td>
-          <td>
-            <div class="actions-cell">
+          <td class="action-td">
+            <!-- Default mode: both buttons -->
+            <div class="actions-cell default-actions">
               <a href="/admin/messages/dm/{{ m.email }}" class="btn-msg">💬 Message</a>
               <button class="btn-call"
                       data-email="{{ m.email }}"
                       title="Offline"
                       onclick="callMember(this)">📹 Call</button>
+            </div>
+            <!-- Picker mode: single arrow (shown via JS) -->
+            <div class="pick-actions" style="display:none;">
+              <span class="pick-arrow">›</span>
             </div>
           </td>
         </tr>
@@ -156,6 +180,43 @@
 </div>
 
 <script>
+/* ── Determine mode from URL ── */
+var _mode = new URLSearchParams(window.location.search).get('mode') || '';
+
+(function applyMode() {
+  if (_mode === 'dm') {
+    document.getElementById('page-title').textContent = 'Pick a Member to Message';
+    document.getElementById('page-desc').textContent  = 'Tap a member to open a direct message conversation.';
+    var banner = document.getElementById('mode-banner');
+    banner.textContent = '💬 Select a member — you'll be taken to the DM conversation.';
+    banner.style.display = '';
+    document.getElementById('actions-header').textContent = '';
+    // Make each row clickable → open DM
+    document.querySelectorAll('.mem-row').forEach(function(row) {
+      var email = row.dataset.email;
+      row.classList.add('picker-active');
+      row.addEventListener('click', function() {
+        window.location.href = '/admin/messages/dm/' + encodeURIComponent(email);
+      });
+    });
+    // Swap button columns for arrow
+    document.querySelectorAll('.default-actions').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('.pick-actions').forEach(function(el) { el.style.display = ''; });
+
+  } else if (_mode === 'call') {
+    document.getElementById('page-title').textContent = 'Pick an Online Member to Call';
+    document.getElementById('page-desc').textContent  = 'Online members are highlighted — tap to start a video call.';
+    var banner = document.getElementById('mode-banner');
+    banner.textContent = '📹 Only online members can be called. Offline members are dimmed.';
+    banner.classList.add('call-mode');
+    banner.style.display = '';
+    document.getElementById('actions-header').textContent = '';
+    // Swap button columns for arrow; click handled after online poll
+    document.querySelectorAll('.default-actions').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('.pick-actions').forEach(function(el) { el.style.display = ''; });
+  }
+})();
+
 (function() {
   /* ── Online Now polling ── */
   function pollOnline() {
@@ -166,19 +227,37 @@
           return m.email.toLowerCase();
         }));
 
-        // Update call buttons
-        document.querySelectorAll('.btn-call').forEach(function(btn) {
-          var email = (btn.dataset.email || '').toLowerCase();
-          if (online.has(email)) {
-            btn.classList.add('online');
-            btn.title = 'Online — click to call';
-          } else {
-            btn.classList.remove('online');
-            btn.title = 'Offline';
-          }
-        });
+        if (_mode === 'call') {
+          // In call mode: online rows are clickable, offline are dimmed
+          document.querySelectorAll('.mem-row').forEach(function(row) {
+            var email = row.dataset.email;
+            row.classList.remove('picker-active', 'picker-offline');
+            // Remove any old listener by cloning
+            if (online.has(email)) {
+              row.classList.add('picker-active');
+              row.onclick = function() {
+                window.location.href = '/admin/messages/dm/' + encodeURIComponent(email) + '?call=1';
+              };
+            } else {
+              row.classList.add('picker-offline');
+              row.onclick = null;
+            }
+          });
+        } else {
+          // Default mode: update btn-call states only
+          document.querySelectorAll('.btn-call').forEach(function(btn) {
+            var email = (btn.dataset.email || '').toLowerCase();
+            if (online.has(email)) {
+              btn.classList.add('online');
+              btn.title = 'Online — click to call';
+            } else {
+              btn.classList.remove('online');
+              btn.title = 'Offline';
+            }
+          });
+        }
 
-        // Update online pill next to name
+        // Online pill next to name (all modes)
         document.querySelectorAll('.online-indicator').forEach(function(el) {
           var email = (el.dataset.email || '').toLowerCase();
           el.style.display = online.has(email) ? '' : 'none';
@@ -191,7 +270,7 @@
   setInterval(pollOnline, 5000);
 })();
 
-/* ── Call button click ── */
+/* ── Call button click (default mode) ── */
 function callMember(btn) {
   if (!btn.classList.contains('online')) return;
   var email = btn.dataset.email;
@@ -204,9 +283,7 @@ function filterMembers() {
   var rows = document.querySelectorAll('.mem-row');
   var visible = 0;
   rows.forEach(function(row) {
-    var match = !q ||
-      row.dataset.name.includes(q) ||
-      row.dataset.email.includes(q);
+    var match = !q || row.dataset.name.includes(q) || row.dataset.email.includes(q);
     row.style.display = match ? '' : 'none';
     if (match) visible++;
   });
