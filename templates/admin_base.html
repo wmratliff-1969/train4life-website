@@ -340,187 +340,220 @@ window._gblBuildPC = function(socket, peerSid) {
 </script>
 
 <script>
-(function() {
+// ── Admin Notification System — top-level (no IIFE so nothing silently aborts) ──
 
-  // ── Audio ──────────────────────────────────────────────────────────────────
-  // Use the pre-loaded <audio> tag — simpler and more reliable than new Audio()
-  var _audioEl = document.getElementById('admin-alert-audio');
+// ── Toast ─────────────────────────────────────────────────────────────────
+window._toastEmail = null;
+window._toastName  = null;
 
-  function playAlert() {
-    if (!_audioEl) return;
-    try { _audioEl.currentTime = 0; _audioEl.play().catch(function(){}); } catch(e) {}
-  }
+window.showAdminToast = function(email, name, msgText) {
+  console.log('[admin-toast] showAdminToast called:', name, email, msgText);
+  window._toastEmail = email;
+  window._toastName  = name;
+  var t = document.getElementById('jeff-toast');
+  if (!t) { console.error('[admin-toast] #jeff-toast element not found!'); return; }
+  document.getElementById('jeff-toast-name').textContent = name || email;
+  document.getElementById('jeff-toast-msg').textContent  = msgText;
+  t.style.cssText = t.style.cssText.replace(/display\s*:\s*\w+\s*;?/i, '');
+  t.style.display = 'block';
+  console.log('[admin-toast] toast is now visible, display=', t.style.display);
+};
 
-  // ── Browser notification permission ───────────────────────────────────────
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-  function browserNotif(title, body, onclick) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    try {
-      var n = new Notification(title, { body: body, icon: '/static/images/logo.png' });
-      if (onclick) n.onclick = function() { window.focus(); onclick(); n.close(); };
-    } catch(e) {}
-  }
+// Test helper — open browser console and run: window._testToast()
+window._testToast = function() {
+  window.showAdminToast('test@example.com', 'Test Member', 'This is a test message!');
+};
 
-  // ── Message toast ──────────────────────────────────────────────────────────
-  function showMsgToast(email, name, msg) {
-    window._toastEmail = email;
-    window._toastName  = name;
-    document.getElementById('jeff-toast-name').textContent = name || email;
-    document.getElementById('jeff-toast-msg').textContent  = msg;
-    document.getElementById('jeff-toast').style.display    = 'block';
-  }
-
-  // ── Mini chat popup ────────────────────────────────────────────────────────
-  var miniChat      = document.getElementById('admin-mini-chat');
-  var miniMsgs      = document.getElementById('admin-mini-chat-msgs');
-  var miniInput     = document.getElementById('admin-mini-chat-input');
-  var _miniEmail    = null;
-  var _miniSender   = null;
-
-  function openMiniChat(email, senderName) {
-    _miniEmail  = email;
-    _miniSender = senderName;
-    document.getElementById('admin-mini-chat-name').textContent = senderName || email;
-    document.getElementById('admin-mini-chat-full').href = '/admin/messages/dm/' + encodeURIComponent(email);
-    miniChat.style.display = 'flex';
-    miniInput.value = '';
-    miniInput.focus();
-    loadMiniChatMsgs(email);
-  }
-
-  function closeMiniChat() {
-    miniChat.style.display = 'none';
-    _miniEmail = null;
-  }
-
-  function loadMiniChatMsgs(email) {
-    miniMsgs.innerHTML = '<div style="color:#52525b;font-size:0.8rem;text-align:center;padding:20px;">Loading…</div>';
-    fetch('/api/admin/dm?email=' + encodeURIComponent(email) + '&limit=20', { credentials: 'same-origin' })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        miniMsgs.innerHTML = '';
-        var msgs = d.messages || [];
-        if (!msgs.length) {
-          miniMsgs.innerHTML = '<div style="color:#52525b;font-size:0.8rem;text-align:center;padding:20px;">No messages yet.</div>';
-          return;
-        }
-        msgs.forEach(function(m) {
-          appendMiniMsg(m.content, m.is_admin);
-        });
-      })
-      .catch(function() {
-        miniMsgs.innerHTML = '<div style="color:#ef4444;font-size:0.8rem;text-align:center;padding:20px;">Failed to load.</div>';
-      });
-  }
-
-  function appendMiniMsg(content, isAdmin) {
-    var div = document.createElement('div');
-    div.className = isAdmin ? 'amc-msg-jeff' : 'amc-msg-member';
-    div.textContent = content;
-    miniMsgs.appendChild(div);
-    miniMsgs.scrollTop = miniMsgs.scrollHeight;
-  }
-
-  function sendMiniMsg() {
-    var text = miniInput.value.trim();
-    if (!text || !_miniEmail) return;
-    miniInput.value = '';
-    // Optimistically append
-    appendMiniMsg(text, true);
-    fetch('/api/admin/dm/send', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: _miniEmail, content: text }),
-    }).catch(function(){});
-  }
-
-  document.getElementById('admin-mini-chat-close').addEventListener('click', closeMiniChat);
-  document.getElementById('admin-mini-chat-send').addEventListener('click', sendMiniMsg);
-  miniInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMiniMsg(); }
-  });
-
-  // When a new socket message arrives for the currently open mini chat, append it
-  function miniChatHandleIncoming(msg) {
-    if (!_miniEmail) return;
-    var email = (msg.chat_id || '').replace(/^dm:/, '');
-    if (email === _miniEmail && !msg.is_admin) {
-      appendMiniMsg(msg.content, false);
+// ── Sound — Web Audio API beep (no file, no autoplay block after first click) ─
+var _adminAudioCtx = null;
+window.playAlert = function() {
+  try {
+    if (!_adminAudioCtx) {
+      _adminAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    var ctx  = _adminAudioCtx;
+    var osc  = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.45);
+  } catch(e) {
+    // fallback: HTML5 audio element
+    var a = document.getElementById('admin-alert-audio');
+    if (a) { try { a.currentTime = 0; a.play().catch(function(){}); } catch(e2) {} }
   }
+};
 
-  // Expose key functions globally for console debugging
-  window.openMiniChat   = openMiniChat;
-  window.playAlert      = playAlert;
-  window.showAdminToast = showMsgToast;  // showMsgToast(email, name, msgText)
+// ── Browser notification permission ───────────────────────────────────────
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+function _adminBrowserNotif(title, body, onclick) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    var n = new Notification(title, { body: body, icon: '/static/images/logo.png' });
+    if (onclick) n.onclick = function() { window.focus(); onclick(); n.close(); };
+  } catch(e) {}
+}
 
-  // ── Socket ────────────────────────────────────────────────────────────────
-  var adminPendingFrom = null, adminPendingChatId = null;
-  try { window.socket = io(); } catch(e) {
-    console.warn('[admin notify] socket.io not available:', e.message);
-    return; // exit IIFE gracefully — no socket events possible
-  }
-  var socket = window.socket;
+// ── Mini chat ─────────────────────────────────────────────────────────────
+var _miniEmail  = null;
+var _miniSender = null;
 
-  socket.on('connect', function() {
-    socket.emit('join_call_room',          { chat_id: 'admin' });
-    socket.emit('join_admin_notifications');
+window.openMiniChat = function(email, senderName) {
+  _miniEmail  = email;
+  _miniSender = senderName;
+  var mc = document.getElementById('admin-mini-chat');
+  var mn = document.getElementById('admin-mini-chat-name');
+  var mf = document.getElementById('admin-mini-chat-full');
+  var mi = document.getElementById('admin-mini-chat-input');
+  if (!mc) return;
+  if (mn) mn.textContent = senderName || email;
+  if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
+  mc.style.display = 'flex';
+  if (mi) { mi.value = ''; mi.focus(); }
+  _loadMiniChatMsgs(email);
+};
+
+function _closeMiniChat() {
+  var mc = document.getElementById('admin-mini-chat');
+  if (mc) mc.style.display = 'none';
+  _miniEmail = null;
+}
+
+function _appendMiniMsg(content, isAdmin) {
+  var mm = document.getElementById('admin-mini-chat-msgs');
+  if (!mm) return;
+  var div = document.createElement('div');
+  div.className = isAdmin ? 'amc-msg-jeff' : 'amc-msg-member';
+  div.textContent = content;
+  mm.appendChild(div);
+  mm.scrollTop = mm.scrollHeight;
+}
+
+function _loadMiniChatMsgs(email) {
+  var mm = document.getElementById('admin-mini-chat-msgs');
+  if (!mm) return;
+  mm.innerHTML = '<div style="color:#52525b;font-size:0.8rem;text-align:center;padding:20px;">Loading…</div>';
+  fetch('/api/admin/dm?email=' + encodeURIComponent(email) + '&limit=20', { credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      mm.innerHTML = '';
+      var msgs = d.messages || [];
+      if (!msgs.length) {
+        mm.innerHTML = '<div style="color:#52525b;font-size:0.8rem;text-align:center;padding:20px;">No messages yet.</div>';
+        return;
+      }
+      msgs.forEach(function(m) { _appendMiniMsg(m.content, m.is_admin); });
+    })
+    .catch(function() {
+      mm.innerHTML = '<div style="color:#ef4444;font-size:0.8rem;text-align:center;padding:20px;">Failed to load.</div>';
+    });
+}
+
+function _sendMiniMsg() {
+  var mi = document.getElementById('admin-mini-chat-input');
+  if (!mi || !_miniEmail) return;
+  var text = mi.value.trim();
+  if (!text) return;
+  mi.value = '';
+  _appendMiniMsg(text, true);
+  fetch('/api/admin/dm/send', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: _miniEmail, content: text }),
+  }).catch(function(){});
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var cb = document.getElementById('admin-mini-chat-close');
+  var sb = document.getElementById('admin-mini-chat-send');
+  var mi = document.getElementById('admin-mini-chat-input');
+  if (cb) cb.addEventListener('click', _closeMiniChat);
+  if (sb) sb.addEventListener('click', _sendMiniMsg);
+  if (mi) mi.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _sendMiniMsg(); }
   });
 
-  // New message from any member DM
-  socket.on('admin_new_message', function(msg) {
-    // display_name is injected server-side; fall back to sender_name; clean up emails
+  var acceptBtn  = document.getElementById('gct-admin-accept');
+  var declineBtn = document.getElementById('gct-admin-decline');
+  if (acceptBtn) acceptBtn.addEventListener('click', async function() {
+    var ct = document.getElementById('global-call-toast-admin');
+    if (ct) ct.style.display = 'none';
+    if (!_adminPendingFrom) return;
+    var s = window._gblState;
+    s.socket = _adminSocket; s.remoteSid = _adminPendingFrom; s.chatId = _adminPendingChatId;
+    var callerEl = document.getElementById('gct-admin-caller');
+    var callerName = callerEl ? callerEl.textContent : 'Someone';
+    _adminPendingFrom = null; _adminPendingChatId = null;
+    if (_adminSocket) _adminSocket.emit('call_accept', { to: s.remoteSid });
+    window._gblShow(callerName);
+  });
+  if (declineBtn) declineBtn.addEventListener('click', function() {
+    var ct = document.getElementById('global-call-toast-admin');
+    if (ct) ct.style.display = 'none';
+    if (_adminPendingFrom && _adminSocket) _adminSocket.emit('call_decline', { to: _adminPendingFrom });
+    _adminPendingFrom = null; _adminPendingChatId = null;
+  });
+});
+
+// ── Socket ────────────────────────────────────────────────────────────────
+var _adminSocket = null;
+var _adminPendingFrom = null, _adminPendingChatId = null;
+
+try {
+  _adminSocket  = io();
+  window.socket = _adminSocket;
+  console.log('[admin notify] socket.io created OK');
+} catch(e) {
+  console.error('[admin notify] socket.io failed to init:', e.message);
+}
+
+if (_adminSocket) {
+  _adminSocket.on('connect', function() {
+    console.log('[admin notify] connected, sid=' + _adminSocket.id);
+    _adminSocket.emit('join_call_room', { chat_id: 'admin' });
+    _adminSocket.emit('join_admin_notifications');
+  });
+
+  _adminSocket.on('admin_new_message', function(msg) {
+    console.log('[admin notify] admin_new_message:', JSON.stringify(msg).substring(0, 120));
     var sender = msg.display_name || msg.sender_name || msg.sender_id || 'Member';
     if (sender.indexOf('@') !== -1) {
-      // looks like an email — convert "mark.ratliff@domain.com" → "Mark Ratliff"
       sender = sender.split('@')[0].replace(/[._-]+/g, ' ')
-                     .replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+                     .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
     }
     var preview = (msg.content || '').substring(0, 80);
     var email   = (msg.chat_id  || '').replace(/^dm:/, '');
-    miniChatHandleIncoming(msg);   // append to mini chat if open for this member
-    // If mini chat is already open for this member, skip toast
-    if (_miniEmail === email) return;
-    playAlert();
-    showMsgToast(email, sender, preview);
-    browserNotif('💬 ' + sender, preview, function() { openMiniChat(email, sender); });
+    if (_miniEmail === email) {
+      if (!msg.is_admin) _appendMiniMsg(msg.content, false);
+      return;
+    }
+    window.playAlert();
+    window.showAdminToast(email, sender, preview);
+    _adminBrowserNotif('💬 ' + sender, preview, function() { window.openMiniChat(email, sender); });
   });
 
-  // Incoming video call
-  socket.on('call_invite', function(data) {
-    adminPendingFrom   = data.from;
-    adminPendingChatId = data.chat_id || '';
+  _adminSocket.on('call_invite', function(data) {
+    _adminPendingFrom   = data.from;
+    _adminPendingChatId = data.chat_id || '';
     var callerName = data.caller_name || 'Someone';
     var el = document.getElementById('gct-admin-caller');
     if (el) el.textContent = callerName;
-    document.getElementById('global-call-toast-admin').style.display = 'block';
-    playAlert();
-    browserNotif('📹 Incoming Video Call', callerName + ' is calling — click to answer', function() {
-      document.getElementById('gct-admin-accept').click();
+    var ct = document.getElementById('global-call-toast-admin');
+    if (ct) ct.style.display = 'block';
+    window.playAlert();
+    _adminBrowserNotif('📹 Incoming Video Call', callerName + ' is calling', function() {
+      var ab = document.getElementById('gct-admin-accept');
+      if (ab) ab.click();
     });
   });
 
-  document.getElementById('gct-admin-accept').addEventListener('click', async function() {
-    document.getElementById('global-call-toast-admin').style.display = 'none';
-    if (!adminPendingFrom) return;
-    var s = window._gblState;
-    s.socket = socket; s.remoteSid = adminPendingFrom; s.chatId = adminPendingChatId;
-    var callerName = (document.getElementById('gct-admin-caller') || {}).textContent || 'Someone';
-    adminPendingFrom = null; adminPendingChatId = null;
-    socket.emit('call_accept', { to: s.remoteSid });
-    window._gblShow(callerName);
-  });
-
-  document.getElementById('gct-admin-decline').addEventListener('click', function() {
-    document.getElementById('global-call-toast-admin').style.display = 'none';
-    if (adminPendingFrom) socket.emit('call_decline', { to: adminPendingFrom });
-    adminPendingFrom = null; adminPendingChatId = null;
-  });
-
-  // WebRTC signaling (Jeff as callee)
-  socket.on('call_offer', async function(data) {
+  _adminSocket.on('call_offer', async function(data) {
     var s = window._gblState;
     if (!s.remoteSid) return;
     s.remoteSid = data.from;
@@ -528,26 +561,27 @@ window._gblBuildPC = function(socket, peerSid) {
       s.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       var lv = document.getElementById('gbl-local');
       if (lv) { lv.srcObject = s.localStream; lv.style.display = 'block'; lv.play().catch(function(){}); }
-      s.pc = window._gblBuildPC(socket, s.remoteSid);
+      s.pc = window._gblBuildPC(_adminSocket, s.remoteSid);
       s.localStream.getTracks().forEach(function(t) { s.pc.addTrack(t, s.localStream); });
       await s.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
       var answer = await s.pc.createAnswer();
       await s.pc.setLocalDescription(answer);
-      socket.emit('call_answer', { to: s.remoteSid, answer: answer });
+      _adminSocket.emit('call_answer', { to: s.remoteSid, answer: answer });
     } catch(err) {
       var st = document.getElementById('gbl-status');
       if (st) st.textContent = 'Camera error: ' + err.message;
     }
   });
 
-  socket.on('call_ice', function(data) {
+  _adminSocket.on('call_ice', function(data) {
     var s = window._gblState;
     if (s.pc && data.candidate) s.pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
   });
 
-  socket.on('call_end', function() { window._gblEnd(); });
+  _adminSocket.on('call_end', function() { window._gblEnd(); });
+}
 
-})();
+console.log('[admin notify] system loaded. Run window._testToast() to test.');
 </script>
 
 </body>
