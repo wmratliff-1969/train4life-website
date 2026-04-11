@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TRAIN4LIFE Admin{% endblock %}</title>
   {% block head_extra %}{% endblock %}
   <style>
@@ -260,7 +260,7 @@
 </div>
 
 <!-- mini chat popup -->
-<div id="admin-mini-chat">
+<div id="admin-mini-chat" style="display:none; position:fixed; bottom:24px; right:24px; width:360px; min-height:300px; background:#1a1a1a; border:2px solid #cc0000; border-radius:12px; z-index:9999999; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
   <div id="admin-mini-chat-header">
     <span id="admin-mini-chat-name"></span>
     <a id="admin-mini-chat-full" href="#">Open Full Chat ↗</a>
@@ -402,32 +402,19 @@ window.openMiniChat = function(email, senderName) {
   var mf = document.getElementById('admin-mini-chat-full');
   var mi = document.getElementById('admin-mini-chat-input');
   if (!mc) { console.error('[openMiniChat] #admin-mini-chat not found'); return; }
-  // Nuclear fix: ensure #admin-mini-chat is a direct child of <body> so that
-  // no parent transform/overflow/filter can interfere with position:fixed.
-  if (mc.parentNode !== document.body) {
-    console.log('[openMiniChat] re-parenting #admin-mini-chat to document.body');
-    document.body.appendChild(mc);
-  }
-  var rightPos = Math.min(24, window.innerWidth - 384);
-  mc.style.setProperty('position',     'fixed',          'important');
-  mc.style.setProperty('bottom',       '24px',           'important');
-  mc.style.setProperty('right',        rightPos + 'px',  'important');
-  mc.style.setProperty('margin-right', '0',              'important');
-  mc.style.setProperty('left',         'auto',           'important');
   if (mn) mn.textContent = senderName || email;
   if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
-  mc.style.setProperty('display', 'flex', 'important');
-  console.log('[openMiniChat] display=', mc.style.display, 'parentNode=', mc.parentNode.tagName);
-  // Defer focus so it doesn't fire in the same event-loop tick as the click
+  mc.style.display = 'flex';
+  mc.style.flexDirection = 'column';
+  console.log('[openMiniChat] opened, display=', mc.style.display);
   if (mi) { mi.value = ''; setTimeout(function(){ mi.focus(); }, 50); }
   _loadMiniChatMsgs(email);
 };
 
 function _closeMiniChat() {
-  console.log('[_closeMiniChat] CALLED — full stack:');
-  console.trace();
+  console.log('[_closeMiniChat] CALLED');
   var mc = document.getElementById('admin-mini-chat');
-  if (mc) mc.style.setProperty('display', 'none', 'important');
+  if (mc) mc.style.display = 'none';
   _miniEmail = null;
 }
 
