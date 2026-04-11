@@ -503,16 +503,17 @@ window._gblBuildPC = function(socket, peerSid) {
   }
 
   // Expose key functions globally for console debugging
-  window.openMiniChat = openMiniChat;
-  window.playAlert    = playAlert;
+  window.openMiniChat   = openMiniChat;
+  window.playAlert      = playAlert;
+  window.showAdminToast = showMsgToast;
 
   // ── Socket ────────────────────────────────────────────────────────────────
   var adminPendingFrom = null, adminPendingChatId = null;
-  var socket;
-  try { socket = io(); } catch(e) {
+  try { window.socket = io(); } catch(e) {
     console.warn('[admin notify] socket.io not available:', e.message);
     return; // exit IIFE gracefully — no socket events possible
   }
+  var socket = window.socket;
 
   socket.on('connect', function() {
     socket.emit('join_call_room',          { chat_id: 'admin' });
