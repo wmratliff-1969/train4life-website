@@ -791,6 +791,9 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
         bundle_id = 'life.train4life.app'
         config_source = 'hardcoded'
         print('[APNs] ⚠️  using hardcoded APNS_BUNDLE_ID', flush=True)
+    # App is a development build — always use sandbox unless explicitly overridden
+    if not os.environ.get('APNS_SANDBOX', '') and config_source in ('hardcoded', 'redis'):
+        sandbox = True
 
     print(f'[APNs] config (source={config_source}): key_id={key_id!r} team_id={team_id!r} bundle_id={bundle_id!r} sandbox={sandbox} key_pem_len={len(key_pem)} token_len={len(device_token)}')
 
@@ -1843,7 +1846,9 @@ def _seed_apns_to_redis():
     team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
     bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
     key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
-    sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
+    # Default sandbox=True — app is a development build; set APNS_SANDBOX=false for production
+    sandbox_env = os.environ.get('APNS_SANDBOX', '')
+    sandbox = sandbox_env.lower() in ('1', 'true', 'yes') if sandbox_env else True
 
     if not all([key_id, team_id, bundle_id, key_pem]):
         print('[STARTUP] ⚠️  APNS env vars incomplete — skipping Redis seed '
