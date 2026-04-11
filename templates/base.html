@@ -1720,12 +1720,14 @@
     @keyframes gctIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
     #jeff-toast { opacity:1 !important; visibility:visible !important; }
   </style>
+  <!-- pre-loaded alert sound -->
+  <audio id="admin-alert-audio" src="/static/sounds/message.mp3" preload="auto"></audio>
   <!-- message toast -->
   <div id="jeff-toast" style="display:none;position:fixed;bottom:30px;right:30px;z-index:999999;background:#1a1a1a;border:3px solid #cc0000;border-radius:10px;padding:20px;min-width:350px;color:white;font-size:16px;opacity:1 !important;visibility:visible !important;">
     <div id="jeff-toast-name" style="color:#cc0000;font-weight:bold;font-size:18px;margin-bottom:8px;"></div>
     <div id="jeff-toast-msg" style="color:white;margin-bottom:12px;"></div>
-    <button onclick="document.getElementById('jeff-toast').style.setProperty('display','none','important')" style="background:#cc0000;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">Dismiss</button>
-    <button onclick="document.getElementById('jeff-toast').style.setProperty('display','none','important');window.location.href='/admin/messages/dm/'+encodeURIComponent(window._toastEmail||'')" style="background:#333;color:white;border:1px solid #666;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin-left:8px;">Open Chat</button>
+    <button type="button" id="jeff-toast-dismiss" style="background:#cc0000;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">Dismiss</button>
+    <button type="button" id="jeff-toast-openchat" style="background:#333;color:white;border:1px solid #666;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin-left:8px;">Open Chat</button>
   </div>
   <!-- call toast -->
   <div id="global-call-toast-admin" style="
@@ -1745,23 +1747,26 @@
   <script src="/static/js/socket.io.min.js"></script>
   <script>
   (function() {
-    // ── Audio setup ──────────────────────────────────────────────────────────
-    var _audio   = null;
-    var _audioOk = false;
-    function _unlockAudio() {
-      if (_audioOk) return;
-      try {
-        _audio = new Audio('/static/sounds/message.mp3');
-        _audio.play().then(function(){ _audio.pause(); _audio.currentTime = 0; _audioOk = true; }).catch(function(){});
-      } catch(e) {}
-    }
-    document.addEventListener('click', _unlockAudio, { once: true });
-
+    // ── Audio ─────────────────────────────────────────────────────────────────
     function playAlert() {
-      _unlockAudio();
-      if (!_audioOk) return;
-      try { _audio.currentTime = 0; _audio.play().catch(function(){}); } catch(e) {}
+      var a = document.getElementById('admin-alert-audio');
+      if (!a) return;
+      a.currentTime = 0;
+      a.play().catch(function(){});
     }
+
+    // ── Toast buttons ─────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function() {
+      var db = document.getElementById('jeff-toast-dismiss');
+      var ob = document.getElementById('jeff-toast-openchat');
+      if (db) db.addEventListener('click', function() {
+        document.getElementById('jeff-toast').style.setProperty('display', 'none', 'important');
+      });
+      if (ob) ob.addEventListener('click', function() {
+        document.getElementById('jeff-toast').style.setProperty('display', 'none', 'important');
+        if (window._toastEmail) window.location.href = '/admin/messages/dm/' + encodeURIComponent(window._toastEmail);
+      });
+    });
 
     // ── Browser notification permission ──────────────────────────────────────
     // Request immediately — admin doesn't need a user-gesture gate since
