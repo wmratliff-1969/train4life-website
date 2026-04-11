@@ -1,4 +1,4 @@
-# Deploy: 2026-04-10 — force fresh Render build to pick up APNS env vars
+# Deploy: 2026-04-11 — force redeploy; self-hosted socket.io on admin pages
 from flask import (Flask, render_template, redirect, url_for, session,
                    request, jsonify, flash, Response)
 import os, json, hashlib, datetime, re, base64, uuid, threading, time, secrets
