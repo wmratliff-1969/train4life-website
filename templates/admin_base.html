@@ -204,22 +204,80 @@
 {# settings, etc.).  admin_chat.html extends base.html instead and sets    #}
 {# window._adminChatHandlesMsg / _callHandledByPage to suppress duplicates #}
 <style>
-  @keyframes gctIn  {from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-  @keyframes gmsgIn {from{opacity:0;transform:translateX(-50%) translateY(-10px)} to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes gctIn   {from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes gmsgIn  {from{opacity:0;transform:translateX(-50%) translateY(-10px)} to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes gchatIn {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   #admin-msg-toast{
     display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
     z-index:99998;background:#18181b;border:1px solid rgba(255,255,255,0.12);
-    border-radius:14px;padding:0.85rem 1.2rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
-    min-width:260px;max-width:88vw;cursor:pointer;animation:gmsgIn 0.2s ease;
+    border-radius:14px;padding:0.75rem 1rem 0.75rem 1.1rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
+    min-width:280px;max-width:88vw;animation:gmsgIn 0.2s ease;
+    display:none;align-items:center;gap:10px;
   }
-  #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.25rem;}
-  #admin-msg-toast-body  {font-size:0.9rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;}
+  #admin-msg-toast-text{flex:1;cursor:pointer;min-width:0;}
+  #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.2rem;}
+  #admin-msg-toast-body  {font-size:0.88rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #admin-msg-toast-x{background:none;border:none;color:#71717a;font-size:1rem;cursor:pointer;padding:4px;flex-shrink:0;line-height:1;}
+  #admin-msg-toast-x:hover{color:#fff;}
+  /* ── Mini chat popup ─────────────────────────────────────────── */
+  #admin-mini-chat{
+    display:none;position:fixed;bottom:24px;right:24px;z-index:99999;
+    width:340px;max-width:calc(100vw - 32px);
+    background:#18181b;border:1px solid rgba(255,255,255,0.12);
+    border-radius:16px;box-shadow:0 8px 36px rgba(0,0,0,0.75);
+    flex-direction:column;overflow:hidden;animation:gchatIn 0.2s ease;
+  }
+  #admin-mini-chat-header{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.08);background:#111;
+  }
+  #admin-mini-chat-name{flex:1;font-weight:700;color:#fff;font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #admin-mini-chat-full{font-size:0.72rem;color:#a78bfa;text-decoration:none;white-space:nowrap;flex-shrink:0;}
+  #admin-mini-chat-full:hover{text-decoration:underline;}
+  #admin-mini-chat-close{background:none;border:none;color:#71717a;font-size:1.05rem;cursor:pointer;padding:2px 4px;flex-shrink:0;}
+  #admin-mini-chat-close:hover{color:#fff;}
+  #admin-mini-chat-msgs{
+    height:220px;overflow-y:auto;padding:12px;
+    display:flex;flex-direction:column;gap:7px;
+  }
+  #admin-mini-chat-msgs::-webkit-scrollbar{width:4px;}
+  #admin-mini-chat-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px;}
+  .amc-msg-jeff  {align-self:flex-end;background:#CC0000;color:#fff;padding:6px 10px;border-radius:10px 10px 2px 10px;font-size:0.84rem;max-width:82%;word-break:break-word;}
+  .amc-msg-member{align-self:flex-start;background:rgba(255,255,255,0.09);color:#e4e4e7;padding:6px 10px;border-radius:10px 10px 10px 2px;font-size:0.84rem;max-width:82%;word-break:break-word;}
+  #admin-mini-chat-footer{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,0.08);}
+  #admin-mini-chat-input{
+    flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+    border-radius:8px;padding:7px 11px;color:#fff;font-size:0.88rem;outline:none;
+  }
+  #admin-mini-chat-input:focus{border-color:#a78bfa;}
+  #admin-mini-chat-send{
+    background:#CC0000;color:#fff;border:none;border-radius:8px;
+    padding:7px 14px;font-weight:700;cursor:pointer;font-size:0.88rem;flex-shrink:0;
+  }
+  #admin-mini-chat-send:hover{filter:brightness(1.12);}
 </style>
 
 <!-- message toast -->
 <div id="admin-msg-toast">
-  <div id="admin-msg-toast-sender">Member</div>
-  <div id="admin-msg-toast-body"></div>
+  <div id="admin-msg-toast-text">
+    <div id="admin-msg-toast-sender">Member</div>
+    <div id="admin-msg-toast-body"></div>
+  </div>
+  <button id="admin-msg-toast-x" title="Dismiss">✕</button>
+</div>
+
+<!-- mini chat popup -->
+<div id="admin-mini-chat">
+  <div id="admin-mini-chat-header">
+    <span id="admin-mini-chat-name"></span>
+    <a id="admin-mini-chat-full" href="#">Open Full Chat ↗</a>
+    <button id="admin-mini-chat-close">✕</button>
+  </div>
+  <div id="admin-mini-chat-msgs"></div>
+  <div id="admin-mini-chat-footer">
+    <input id="admin-mini-chat-input" type="text" placeholder="Reply…" autocomplete="off">
+    <button id="admin-mini-chat-send">Send</button>
+  </div>
 </div>
 <!-- call toast -->
 <div id="global-call-toast-admin" style="
@@ -293,19 +351,27 @@ window._gblBuildPC = function(socket, peerSid) {
 
 <script>
 (function() {
+
   // ── Audio ──────────────────────────────────────────────────────────────────
-  var _audio = null, _audioOk = false;
+  // Create element immediately so it's ready; unlock on first any interaction.
+  var _audio   = new Audio('/static/sounds/message.mp3');
+  var _audioOk = false;
   function _unlockAudio() {
     if (_audioOk) return;
-    try {
-      _audio = new Audio('/static/sounds/message.mp3');
-      _audio.play().then(function(){ _audio.pause(); _audio.currentTime = 0; _audioOk = true; }).catch(function(){});
-    } catch(e) {}
+    _audio.volume = 0;
+    var p = _audio.play();
+    if (p && p.then) {
+      p.then(function() {
+        _audio.pause(); _audio.currentTime = 0; _audio.volume = 1; _audioOk = true;
+      }).catch(function(){});
+    }
   }
-  document.addEventListener('click', _unlockAudio, { once: true });
+  // Catch both click and keydown so any interaction unlocks it
+  document.addEventListener('click',   _unlockAudio, { once: true });
+  document.addEventListener('keydown', _unlockAudio, { once: true });
+
   function playAlert() {
-    _unlockAudio();
-    if (!_audioOk) return;
+    if (!_audioOk) { _unlockAudio(); return; }
     try { _audio.currentTime = 0; _audio.play().catch(function(){}); } catch(e) {}
   }
 
@@ -321,24 +387,115 @@ window._gblBuildPC = function(socket, peerSid) {
     } catch(e) {}
   }
 
-  // ── Message toast ─────────────────────────────────────────────────────────
-  var _msgTimer = null, _msgEmail = null;
-  var msgToast  = document.getElementById('admin-msg-toast');
+  // ── Message toast (15s, X dismiss, click → mini chat) ─────────────────────
+  var _msgTimer  = null;
+  var _msgEmail  = null;
+  var _msgSender = null;
+  var msgToast   = document.getElementById('admin-msg-toast');
+
   function showMsgToast(senderName, preview, memberEmail) {
-    _msgEmail = memberEmail;
+    _msgEmail  = memberEmail;
+    _msgSender = senderName;
     document.getElementById('admin-msg-toast-sender').textContent = senderName;
     document.getElementById('admin-msg-toast-body').textContent   = preview;
-    msgToast.style.display = 'block';
+    msgToast.style.display = 'flex';
     clearTimeout(_msgTimer);
-    _msgTimer = setTimeout(function(){ msgToast.style.display = 'none'; }, 6000);
+    _msgTimer = setTimeout(dismissMsgToast, 15000);
   }
-  msgToast.addEventListener('click', function() {
+  function dismissMsgToast() {
     msgToast.style.display = 'none';
     clearTimeout(_msgTimer);
-    window.location.href = _msgEmail
-      ? '/admin/messages/dm/' + encodeURIComponent(_msgEmail)
-      : '/admin/messages';
+  }
+
+  // Click on text → open mini chat
+  document.getElementById('admin-msg-toast-text').addEventListener('click', function() {
+    dismissMsgToast();
+    if (_msgEmail) openMiniChat(_msgEmail, _msgSender);
   });
+  // X button → just dismiss
+  document.getElementById('admin-msg-toast-x').addEventListener('click', function(e) {
+    e.stopPropagation();
+    dismissMsgToast();
+  });
+
+  // ── Mini chat popup ────────────────────────────────────────────────────────
+  var miniChat      = document.getElementById('admin-mini-chat');
+  var miniMsgs      = document.getElementById('admin-mini-chat-msgs');
+  var miniInput     = document.getElementById('admin-mini-chat-input');
+  var _miniEmail    = null;
+  var _miniSender   = null;
+
+  function openMiniChat(email, senderName) {
+    _miniEmail  = email;
+    _miniSender = senderName;
+    document.getElementById('admin-mini-chat-name').textContent = senderName || email;
+    document.getElementById('admin-mini-chat-full').href = '/admin/messages/dm/' + encodeURIComponent(email);
+    miniChat.style.display = 'flex';
+    miniInput.value = '';
+    miniInput.focus();
+    loadMiniChatMsgs(email);
+  }
+
+  function closeMiniChat() {
+    miniChat.style.display = 'none';
+    _miniEmail = null;
+  }
+
+  function loadMiniChatMsgs(email) {
+    miniMsgs.innerHTML = '<div style="color:#52525b;font-size:0.8rem;text-align:center;padding:20px;">Loading…</div>';
+    fetch('/api/admin/dm?email=' + encodeURIComponent(email) + '&limit=20', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        miniMsgs.innerHTML = '';
+        var msgs = d.messages || [];
+        if (!msgs.length) {
+          miniMsgs.innerHTML = '<div style="color:#52525b;font-size:0.8rem;text-align:center;padding:20px;">No messages yet.</div>';
+          return;
+        }
+        msgs.forEach(function(m) {
+          appendMiniMsg(m.content, m.is_admin);
+        });
+      })
+      .catch(function() {
+        miniMsgs.innerHTML = '<div style="color:#ef4444;font-size:0.8rem;text-align:center;padding:20px;">Failed to load.</div>';
+      });
+  }
+
+  function appendMiniMsg(content, isAdmin) {
+    var div = document.createElement('div');
+    div.className = isAdmin ? 'amc-msg-jeff' : 'amc-msg-member';
+    div.textContent = content;
+    miniMsgs.appendChild(div);
+    miniMsgs.scrollTop = miniMsgs.scrollHeight;
+  }
+
+  function sendMiniMsg() {
+    var text = miniInput.value.trim();
+    if (!text || !_miniEmail) return;
+    miniInput.value = '';
+    // Optimistically append
+    appendMiniMsg(text, true);
+    fetch('/api/admin/dm/send', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: _miniEmail, content: text }),
+    }).catch(function(){});
+  }
+
+  document.getElementById('admin-mini-chat-close').addEventListener('click', closeMiniChat);
+  document.getElementById('admin-mini-chat-send').addEventListener('click', sendMiniMsg);
+  miniInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMiniMsg(); }
+  });
+
+  // When a new socket message arrives for the currently open mini chat, append it
+  function miniChatHandleIncoming(msg) {
+    if (!_miniEmail) return;
+    var email = (msg.chat_id || '').replace(/^dm:/, '');
+    if (email === _miniEmail && !msg.is_admin) {
+      appendMiniMsg(msg.content, false);
+    }
+  }
 
   // ── Socket ────────────────────────────────────────────────────────────────
   var adminPendingFrom = null, adminPendingChatId = null;
@@ -354,11 +511,12 @@ window._gblBuildPC = function(socket, peerSid) {
     var sender  = msg.sender_name || msg.sender_id || 'Member';
     var preview = (msg.content || '').substring(0, 80);
     var email   = (msg.chat_id  || '').replace(/^dm:/, '');
+    miniChatHandleIncoming(msg);   // append to mini chat if open for this member
+    // If mini chat is already open for this member, skip toast
+    if (_miniEmail === email) return;
     playAlert();
     showMsgToast(sender, preview, email);
-    browserNotif('💬 ' + sender, preview, function() {
-      window.location.href = '/admin/messages/dm/' + encodeURIComponent(email);
-    });
+    browserNotif('💬 ' + sender, preview, function() { openMiniChat(email, sender); });
   });
 
   // Incoming video call
@@ -419,6 +577,7 @@ window._gblBuildPC = function(socket, peerSid) {
   });
 
   socket.on('call_end', function() { window._gblEnd(); });
+
 })();
 </script>
 

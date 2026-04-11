@@ -2515,6 +2515,38 @@ def api_messages_mark_read():
     return jsonify({'ok': True})
 
 
+@app.route('/api/admin/dm')
+def api_admin_dm_fetch():
+    """Return recent messages for an admin DM as JSON (for mini-chat widget)."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'unauthorized'}), 403
+    email = (request.args.get('email') or '').strip().lower()
+    if not email:
+        return jsonify({'error': 'email required'}), 400
+    limit   = min(int(request.args.get('limit', 20)), 50)
+    chat_id = f'dm:{email}'
+    msgs    = _load_messages().get(chat_id, [])
+    _mark_read('admin', chat_id)
+    return jsonify({'messages': msgs[-limit:]})
+
+
+@app.route('/api/admin/dm/send', methods=['POST'])
+def api_admin_dm_send():
+    """Send a reply to a member DM from the admin mini-chat widget."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'unauthorized'}), 403
+    data    = request.get_json(silent=True) or {}
+    email   = (data.get('email') or '').strip().lower()
+    content = (data.get('content') or '').strip()
+    if not email or not content:
+        return jsonify({'error': 'email and content required'}), 400
+    chat_id     = f'dm:{email}'
+    sender_name = session.get('user_name') or 'Jeff'
+    sender_id   = session.get('user_email') or 'admin'
+    msg = _post_and_broadcast(chat_id, sender_id, sender_name, content, is_admin=True)
+    return jsonify({'ok': True, 'message': msg})
+
+
 @app.route('/admin/messages')
 def admin_messages_page():
     if not session.get('is_admin'):
