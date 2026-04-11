@@ -402,17 +402,22 @@ window.openMiniChat = function(email, senderName) {
   var mf = document.getElementById('admin-mini-chat-full');
   var mi = document.getElementById('admin-mini-chat-input');
   if (!mc) { console.error('[openMiniChat] #admin-mini-chat not found'); return; }
-  console.log('[openMiniChat] mc.style.display BEFORE:', mc.style.display, '| getAttribute("style"):', mc.getAttribute('style'));
+  // Nuclear fix: ensure #admin-mini-chat is a direct child of <body> so that
+  // no parent transform/overflow/filter can interfere with position:fixed.
+  if (mc.parentNode !== document.body) {
+    console.log('[openMiniChat] re-parenting #admin-mini-chat to document.body');
+    document.body.appendChild(mc);
+  }
+  mc.style.setProperty('position',  'fixed',  'important');
+  mc.style.setProperty('bottom',    '24px',   'important');
+  mc.style.setProperty('right',     '24px',   'important');
+  mc.style.setProperty('left',      'auto',   'important');
   if (mn) mn.textContent = senderName || email;
   if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
-  // Use !important so no CSS rule can override display:flex
   mc.style.setProperty('display', 'flex', 'important');
-  console.log('[openMiniChat] mc.style.display AFTER setProperty:', mc.style.display, '| getAttribute("style"):', mc.getAttribute('style'));
+  console.log('[openMiniChat] display=', mc.style.display, 'parentNode=', mc.parentNode.tagName);
   // Defer focus so it doesn't fire in the same event-loop tick as the click
-  if (mi) { mi.value = ''; setTimeout(function(){
-    console.log('[openMiniChat] setTimeout 50ms — display now:', mc.style.display);
-    mi.focus();
-  }, 50); }
+  if (mi) { mi.value = ''; setTimeout(function(){ mi.focus(); }, 50); }
   _loadMiniChatMsgs(email);
 };
 
