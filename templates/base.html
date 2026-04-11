@@ -1814,33 +1814,6 @@
       } catch(e) {}
     }
 
-    // ── Message toast ─────────────────────────────────────────────────────
-    window._toastEmail = null;
-    function showAdminToast(memberEmail, messageText) {
-      var toast = document.getElementById('adminMessageToast');
-      var toastText = document.getElementById('adminToastText');
-      window._toastEmail = memberEmail || null;
-      if (toastText) {
-        if (memberEmail) {
-          toastText.textContent = messageText ? messageText : 'New message from ' + memberEmail;
-        } else {
-          toastText.textContent = 'New message received';
-        }
-      }
-      if (toast) { toast.style.display = 'block'; }
-    }
-    function dismissAdminToast() {
-      var toast = document.getElementById('adminMessageToast');
-      if (toast) { toast.style.display = 'none'; }
-      window._toastEmail = null;
-    }
-    function replyToAdminToast() {
-      if (!window._toastEmail) { return; }
-      var email = encodeURIComponent(window._toastEmail);
-      window.location.href = '/admin/messages/dm/' + email;
-    }
-    window.showAdminToast = showAdminToast;
-
     // ── Mini chat ─────────────────────────────────────────────────────────────
     var _miniEmail = null;
     window.openMiniChat = function(email, senderName) {
@@ -2005,33 +1978,23 @@
   </script>
   {% endif %}
 <script>
-/* Toast functions always defined globally so onclick handlers work on any page */
-window._toastEmail = window._toastEmail || null;
-function showAdminToast(memberEmail, messageText) {
+window._toastEmail = null;
+window.showAdminToast = function(memberEmail, messageText) {
   var toast = document.getElementById('adminMessageToast');
   var toastText = document.getElementById('adminToastText');
   window._toastEmail = memberEmail || null;
-  if (toastText) {
-    if (memberEmail) {
-      toastText.textContent = messageText ? messageText : 'New message from ' + memberEmail;
-    } else {
-      toastText.textContent = 'New message received';
-    }
-  }
-  if (toast) { toast.style.display = 'block'; }
-}
-function dismissAdminToast() {
+  if (toastText) toastText.textContent = messageText || ('New message from ' + memberEmail);
+  if (toast) toast.style.display = 'block';
+};
+window.dismissAdminToast = function() {
   var toast = document.getElementById('adminMessageToast');
-  if (toast) { toast.style.display = 'none'; }
+  if (toast) toast.style.display = 'none';
   window._toastEmail = null;
-}
-function replyToAdminToast() {
-  if (!window._toastEmail) { return; }
+};
+window.replyToAdminToast = function() {
+  if (!window._toastEmail) return;
   window.location.href = '/admin/messages/dm/' + encodeURIComponent(window._toastEmail);
-}
-window.showAdminToast = showAdminToast;
-window.dismissAdminToast = dismissAdminToast;
-window.replyToAdminToast = replyToAdminToast;
+};
 </script>
 </body>
 </html>
