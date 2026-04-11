@@ -1747,6 +1747,16 @@
       </div>
     </div>
   </div>
+  <!-- Admin call toast -->
+  <div id="adminCallToast" style="display:none; position:fixed; bottom:80px; right:24px; z-index:999999; background:#1a1a1a; border:2px solid #00cc44; border-radius:12px; padding:16px 20px; min-width:320px; max-width:400px; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    <div class="toast-body">
+      <span id="adminCallToastText" style="color:white; font-size:15px; display:block; margin-bottom:12px;">📹 Incoming Video Call</span>
+      <div class="toast-actions">
+        <button type="button" onclick="acceptCallToast()" style="background:#00cc44;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin-right:8px;">Accept</button>
+        <button type="button" onclick="declineCallToast()" style="background:#333;color:white;border:1px solid #666;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">Decline</button>
+      </div>
+    </div>
+  </div>
   <!-- mini chat popup -->
   <div id="admin-mini-chat" style="display:none; position:fixed; bottom:24px; right:24px; width:360px; min-height:300px; background:#1a1a1a; border:2px solid #cc0000; border-radius:12px; z-index:9999999; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
     <div id="admin-mini-chat-header">
@@ -1915,17 +1925,17 @@
     // ── Incoming video call from a member ─────────────────────────────────
     socket.on('call_invite', function(data) {
       if (window._callHandledByPage) return;
-      adminPendingFrom   = data.from;
-      adminPendingChatId = data.chat_id || '';
       var callerName = data.caller_name || 'Someone';
-      var el = document.getElementById('gct-admin-caller');
-      if (el) el.textContent = callerName;
-      document.getElementById('global-call-toast-admin').style.display = 'block';
+      var email = (data.chat_id || '').replace(/^dm:/, '') || data.caller_email || '';
+      var callUrl = email
+        ? '/admin/messages/dm/' + encodeURIComponent(email) + '?call=1'
+        : '/admin/messages';
       playAlert();
+      window.showCallToast(callerName, callUrl);
       browserNotif(
         '📹 Incoming Video Call',
         callerName + ' is calling — click to answer',
-        function() { document.getElementById('gct-admin-accept').click(); }
+        function() { window.acceptCallToast(); }
       );
     });
 
@@ -2001,6 +2011,24 @@ window.replyToAdminToast = function() {
   console.log('[toast] replyToAdminToast — _toastEmail:', window._toastEmail);
   if (!window._toastEmail) return;
   window.location.href = '/admin/messages/dm/' + encodeURIComponent(window._toastEmail);
+};
+window._callUrl = null;
+window.showCallToast = function(callerName, callUrl) {
+  window._callUrl = callUrl;
+  var toast = document.getElementById('adminCallToast');
+  var text  = document.getElementById('adminCallToastText');
+  if (text) text.textContent = '📹 Incoming Video Call from ' + callerName;
+  if (toast) toast.style.display = 'block';
+};
+window.acceptCallToast = function() {
+  var toast = document.getElementById('adminCallToast');
+  if (toast) toast.style.display = 'none';
+  if (window._callUrl) window.location.href = window._callUrl;
+};
+window.declineCallToast = function() {
+  var toast = document.getElementById('adminCallToast');
+  if (toast) toast.style.display = 'none';
+  window._callUrl = null;
 };
 </script>
 </body>
