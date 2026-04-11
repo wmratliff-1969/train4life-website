@@ -640,7 +640,8 @@ def _post_and_broadcast(chat_id, sender_id, sender_name, content, is_admin=False
                 users = _load_users()
                 display_name = (users.get(member_email) or {}).get('name') or \
                                member_email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
-                notify_msg = dict(msg, display_name=display_name)
+                notify_msg = dict(msg, display_name=display_name,
+                                  chat_id=chat_id, sender_email=member_email)
                 print(f'[SIO] emitting admin_new_message to admin_notifications room for {member_email}', flush=True)
                 socketio.emit('admin_new_message', notify_msg, to='admin_notifications')
             except Exception:
@@ -3643,7 +3644,7 @@ def api_incoming_call():
 
 @app.route('/api/version')
 def api_version():
-    return jsonify({"version": "socket-email-v13", "socket_admin": True, "built": "2026-04-11"})
+    return jsonify({"version": "emit-email-v13", "socket_admin": True, "built": "2026-04-11"})
 
 
 @app.route('/api/whoami')
