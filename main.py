@@ -3637,7 +3637,7 @@ def api_incoming_call():
 
 @app.route('/api/version')
 def api_version():
-    return jsonify({"version": "toast-sound-reply-v5", "socket_admin": True, "built": "2026-04-11"})
+    return jsonify({"version": "mini-chat-fix-v6", "socket_admin": True, "built": "2026-04-11"})
 
 
 @app.route('/api/whoami')

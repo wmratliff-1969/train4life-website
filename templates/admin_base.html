@@ -215,7 +215,7 @@
     width:360px;max-width:calc(100vw - 32px);
     background:#18181b;border:1px solid rgba(255,255,255,0.12);
     border-radius:16px;box-shadow:0 8px 36px rgba(0,0,0,0.75);
-    flex-direction:column;overflow:visible;animation:gchatIn 0.2s ease;
+    flex-direction:column;overflow:visible;
   }
   #admin-mini-chat-header{
     display:flex;align-items:center;gap:8px;
@@ -399,17 +399,20 @@ window.openMiniChat = function(email, senderName) {
   var mn = document.getElementById('admin-mini-chat-name');
   var mf = document.getElementById('admin-mini-chat-full');
   var mi = document.getElementById('admin-mini-chat-input');
-  if (!mc) return;
+  if (!mc) { console.error('[openMiniChat] #admin-mini-chat not found'); return; }
   if (mn) mn.textContent = senderName || email;
   if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
-  mc.style.display = 'flex';
-  if (mi) { mi.value = ''; mi.focus(); }
+  // Use !important so no CSS rule can override display:flex
+  mc.style.setProperty('display', 'flex', 'important');
+  console.log('[openMiniChat] opened for', email, 'display=', mc.style.display);
+  // Defer focus so it doesn't fire in the same event-loop tick as the click
+  if (mi) { mi.value = ''; setTimeout(function(){ mi.focus(); }, 50); }
   _loadMiniChatMsgs(email);
 };
 
 function _closeMiniChat() {
   var mc = document.getElementById('admin-mini-chat');
-  if (mc) mc.style.display = 'none';
+  if (mc) mc.style.setProperty('display', 'none', 'important');
   _miniEmail = null;
 }
 
