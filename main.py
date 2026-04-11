@@ -761,13 +761,13 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
     if not all([key_id, team_id, bundle_id, key_pem, device_token]):
         missing = [k for k, v in [('key_id', key_id), ('team_id', team_id), ('bundle_id', bundle_id), ('key_pem', key_pem), ('device_token', device_token)] if not v]
         print(f'[APNs] ❌ missing config: {missing} — skipping')
-        return
+        return {'ok': False, 'error': 'missing config', 'missing': missing}
     try:
         import jwt as pyjwt
         import httpx
     except ImportError as e:
         print(f'[APNs] ❌ missing dependency: {e}')
-        return
+        return {'ok': False, 'error': f'missing dependency: {e}'}
     now   = int(time.time())
     token = pyjwt.encode(
         {'iss': team_id, 'iat': now},
@@ -801,12 +801,16 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
         with httpx.Client(http2=True, timeout=10) as client:
             resp = client.post(url, json=payload, headers=headers)
         if resp.status_code == 200:
-            print(f'[APNs] ✅ delivered — apns-id={resp.headers.get("apns-id", "?")}')
+            apns_id = resp.headers.get('apns-id', '?')
+            print(f'[APNs] ✅ delivered — apns-id={apns_id}')
+            return {'ok': True, 'status': 200, 'apns_id': apns_id}
         else:
             reason = resp.json().get('reason', resp.text) if resp.text else 'unknown'
             print(f'[APNs] ❌ status={resp.status_code} reason={reason!r} token={device_token[:20]}...')
+            return {'ok': False, 'status': resp.status_code, 'reason': reason}
     except Exception as e:
         print(f'[APNs] ❌ send error: {e}')
+        return {'ok': False, 'error': str(e)}
 
 
 def _push_to_member(email, title, body, notif_type, extra=None):
@@ -1657,6 +1661,31 @@ _live_settings_mem = None   # None = not yet initialised (cache)
 _UPSTASH_URL   = os.environ.get('UPSTASH_REDIS_REST_URL', '').rstrip('/')
 _UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN', '')
 _UPSTASH_KEY   = 'live_settings'
+
+# ── APNS + Upstash startup diagnostics ───────────────────────────────────────
+def _log_startup_config():
+    """Print APNS and Upstash Redis config at startup (values masked)."""
+    def mask(v):
+        return (v[:4] + '***' + v[-4:]) if len(v) > 8 else ('***' if v else '(not set)')
+
+    _key_id    = os.environ.get('APNS_KEY_ID', '').strip()
+    _team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
+    _bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
+    _key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
+    _sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
+    print('[STARTUP] ══ APNS CONFIG ════════════════════════════', flush=True)
+    print(f'[STARTUP]   APNS_KEY_ID    = {mask(_key_id)}', flush=True)
+    print(f'[STARTUP]   APNS_TEAM_ID   = {mask(_team_id)}', flush=True)
+    print(f'[STARTUP]   APNS_BUNDLE_ID = {_bundle_id or "(not set)"}', flush=True)
+    print(f'[STARTUP]   APNS_KEY       = {"set (" + str(len(_key_pem)) + " chars)" if _key_pem else "(not set)"}', flush=True)
+    print(f'[STARTUP]   APNS_SANDBOX   = {_sandbox}', flush=True)
+    _upstash_url = os.environ.get('UPSTASH_REDIS_REST_URL', '').strip()
+    _upstash_tok = os.environ.get('UPSTASH_REDIS_REST_TOKEN', '').strip()
+    print(f'[STARTUP]   UPSTASH_URL    = {"set (" + _upstash_url[:30] + "...)" if _upstash_url else "(not set)"}', flush=True)
+    print(f'[STARTUP]   UPSTASH_TOKEN  = {mask(_upstash_tok)}', flush=True)
+    print('[STARTUP] ════════════════════════════════════════════', flush=True)
+
+_log_startup_config()
 
 def _upstash_get():
     """Fetch live_settings JSON from Upstash. Returns dict or None on error/missing."""
@@ -3491,25 +3520,53 @@ def api_register_device():
 
 @app.route('/api/test-push', methods=['GET', 'POST'])
 def api_test_push():
-    """Send a test APNs push to the currently logged-in user (GET or POST).
-    Useful for verifying APNs config + device token registration."""
+    """Send a synchronous test APNs push to the currently logged-in user.
+    Checks Redis and users.json for tokens, runs APNs inline, and returns the
+    full response (status, reason, apns-id) so failures are immediately visible."""
     email, _ = _msg_auth()
     if not email:
         return jsonify({'ok': False, 'error': 'not logged in'}), 401
-    users      = _load_users()
-    user       = users.get(email, {})
-    apns_token = user.get('apns_device_token', '').strip()
-    player_id  = user.get('onesignal_player_id', '').strip()
+
+    # ── Redis token check ───────────────────────────────────────────────────
+    redis_tokens     = _redis_get_tokens(email)
+    apns_token_redis = (redis_tokens.get('apns') or '').strip()
+    player_id_redis  = (redis_tokens.get('onesignal') or '').strip()
+
+    # ── users.json fallback ─────────────────────────────────────────────────
+    user            = _load_users().get(email, {})
+    apns_token_json = user.get('apns_device_token', '').strip()
+    player_id_json  = user.get('onesignal_player_id', '').strip()
+
+    # Prefer Redis token (survives restarts)
+    apns_token   = apns_token_redis or apns_token_json
+    player_id    = player_id_redis  or player_id_json
+    token_source = 'redis' if apns_token_redis else ('users.json' if apns_token_json else 'none')
+
     if not apns_token and not player_id:
-        return jsonify({'ok': False, 'error': f'no push token registered for {email}',
-                        'hint': 'open the app and wait for DeviceRegistration to run'}), 400
-    print(f'[TEST-PUSH] sending test push to {email} apns={apns_token[:20] if apns_token else "none"} onesignal={player_id[:20] if player_id else "none"}')
-    _push_to_member(email, '🔔 Test Push', f'APNs working for {email}!', 'message')
+        return jsonify({
+            'ok': False,
+            'error': f'no push token registered for {email}',
+            'hint': 'open the app and wait for DeviceRegistration to run',
+            'redis_raw': redis_tokens,
+        }), 400
+
+    # ── Synchronous APNs push (captures full response) ──────────────────────
+    apns_result = None
+    if apns_token:
+        print(f'[TEST-PUSH] synchronous APNs to {email} source={token_source} token={apns_token[:20]}...')
+        apns_result = _send_apns_push(
+            apns_token, '🔔 Test Push', f'APNs working for {email}!',
+            {'data': {'type': 'message'}},
+        )
+
     return jsonify({
         'ok': True,
         'email': email,
-        'apns_token': apns_token[:20] + '...' if apns_token else None,
-        'player_id':  player_id[:20] + '...' if player_id else None,
+        'token_source':        token_source,
+        'apns_token_redis':    apns_token_redis[:20] + '...' if apns_token_redis else None,
+        'apns_token_json':     apns_token_json[:20]  + '...' if apns_token_json  else None,
+        'player_id':           player_id[:20]        + '...' if player_id        else None,
+        'apns_result':         apns_result,
     })
 
 
