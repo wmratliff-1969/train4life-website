@@ -393,6 +393,7 @@ var _miniEmail  = null;
 var _miniSender = null;
 
 window.openMiniChat = function(email, senderName) {
+  console.log('[openMiniChat] CALLED email=', email, 'senderName=', senderName);
   _miniEmail  = email;
   _miniSender = senderName;
   var mc = document.getElementById('admin-mini-chat');
@@ -400,13 +401,17 @@ window.openMiniChat = function(email, senderName) {
   var mf = document.getElementById('admin-mini-chat-full');
   var mi = document.getElementById('admin-mini-chat-input');
   if (!mc) { console.error('[openMiniChat] #admin-mini-chat not found'); return; }
+  console.log('[openMiniChat] mc.style.display BEFORE:', mc.style.display, '| getAttribute("style"):', mc.getAttribute('style'));
   if (mn) mn.textContent = senderName || email;
   if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
   // Use !important so no CSS rule can override display:flex
   mc.style.setProperty('display', 'flex', 'important');
-  console.log('[openMiniChat] opened for', email, 'display=', mc.style.display);
+  console.log('[openMiniChat] mc.style.display AFTER setProperty:', mc.style.display, '| getAttribute("style"):', mc.getAttribute('style'));
   // Defer focus so it doesn't fire in the same event-loop tick as the click
-  if (mi) { mi.value = ''; setTimeout(function(){ mi.focus(); }, 50); }
+  if (mi) { mi.value = ''; setTimeout(function(){
+    console.log('[openMiniChat] setTimeout 50ms — display now:', mc.style.display);
+    mi.focus();
+  }, 50); }
   _loadMiniChatMsgs(email);
 };
 
@@ -461,6 +466,21 @@ function _sendMiniMsg() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // ── MutationObserver: log every style change on #admin-mini-chat ──────────
+  var _mcEl = document.getElementById('admin-mini-chat');
+  if (_mcEl) {
+    new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        if (m.attributeName === 'style') {
+          console.log('[MutationObserver] #admin-mini-chat style changed → display:', _mcEl.style.display, '| full style attr:', _mcEl.getAttribute('style'), '\nStack:', new Error().stack);
+        }
+      });
+    }).observe(_mcEl, { attributes: true, attributeFilter: ['style'] });
+    console.log('[DOMContentLoaded] MutationObserver attached to #admin-mini-chat');
+  } else {
+    console.error('[DOMContentLoaded] #admin-mini-chat NOT FOUND — cannot attach observer');
+  }
+
   // Toast buttons — wired here so they always work and never navigate
   var dismissBtn = document.getElementById('jeff-toast-dismiss');
   var replyBtn   = document.getElementById('jeff-toast-reply');
