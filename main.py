@@ -641,6 +641,7 @@ def _post_and_broadcast(chat_id, sender_id, sender_name, content, is_admin=False
                 display_name = (users.get(member_email) or {}).get('name') or \
                                member_email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
                 notify_msg = dict(msg, display_name=display_name)
+                print(f'[SIO] emitting admin_new_message to admin_notifications room for {member_email}', flush=True)
                 socketio.emit('admin_new_message', notify_msg, to='admin_notifications')
             except Exception:
                 pass
@@ -3441,8 +3442,13 @@ if _SIO_OK and socketio:
     @socketio.on('join_admin_notifications')
     def _sio_join_admin_notifications():
         """Admin joins a dedicated room to receive new-message alerts from any DM."""
-        if session.get('is_admin'):
+        is_admin = bool(session.get('is_admin'))
+        print(f'[SIO] join_admin_notifications sid={request.sid} is_admin={is_admin}', flush=True)
+        if is_admin:
             _sio_join('admin_notifications')
+            print(f'[SIO] ✓ joined admin_notifications room sid={request.sid}', flush=True)
+        else:
+            print(f'[SIO] ✗ NOT joining — session has no is_admin. session keys={list(session.keys())}', flush=True)
 
     @socketio.on('join_call_room')
     def _sio_join_call_room(data):
@@ -3637,7 +3643,7 @@ def api_incoming_call():
 
 @app.route('/api/version')
 def api_version():
-    return jsonify({"version": "mini-chat-fix-v6", "socket_admin": True, "built": "2026-04-11"})
+    return jsonify({"version": "toast-audit-v1", "socket_admin": True, "built": "2026-04-11"})
 
 
 @app.route('/api/whoami')

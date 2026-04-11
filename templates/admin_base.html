@@ -344,6 +344,7 @@ window._gblBuildPC = function(socket, peerSid) {
 
 <script>
 // ── Admin Notification System — top-level (no IIFE so nothing silently aborts) ──
+console.log('[admin-notify] script block loaded on page:', location.pathname);
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 window._toastEmail = null;
@@ -536,10 +537,18 @@ try {
 }
 
 if (_adminSocket) {
-  _adminSocket.on('connect', function() {
-    console.log('[admin notify] connected, sid=' + _adminSocket.id);
+  function _adminJoinRooms() {
+    console.log('[admin notify] joining rooms, sid=' + _adminSocket.id);
     _adminSocket.emit('join_call_room', { chat_id: 'admin' });
     _adminSocket.emit('join_admin_notifications');
+  }
+  _adminSocket.on('connect', function() {
+    console.log('[admin notify] connected, sid=' + _adminSocket.id);
+    _adminJoinRooms();
+  });
+  _adminSocket.on('reconnect', function() {
+    console.log('[admin notify] reconnected — re-joining rooms');
+    _adminJoinRooms();
   });
 
   _adminSocket.on('admin_new_message', function(msg) {
