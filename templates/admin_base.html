@@ -417,6 +417,8 @@ window.openMiniChat = function(email, senderName) {
 };
 
 function _closeMiniChat() {
+  console.log('[_closeMiniChat] CALLED — full stack:');
+  console.trace();
   var mc = document.getElementById('admin-mini-chat');
   if (mc) mc.style.setProperty('display', 'none', 'important');
   _miniEmail = null;
