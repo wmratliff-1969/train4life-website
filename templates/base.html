@@ -1718,20 +1718,14 @@
   {% if session.get('is_admin') %}
   <style>
     @keyframes gctIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-    @keyframes gmsgIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-    #admin-msg-toast{
-      display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
-      z-index:99998;background:#18181b;border:1px solid rgba(255,255,255,0.12);
-      border-radius:14px;padding:0.85rem 1.2rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
-      min-width:260px;max-width:88vw;cursor:pointer;animation:gmsgIn 0.2s ease;
-    }
-    #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.25rem;}
-    #admin-msg-toast-body{font-size:0.9rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;}
+    #jeff-toast { opacity:1 !important; visibility:visible !important; }
   </style>
-  <!-- message toast (click → messages page) -->
-  <div id="admin-msg-toast">
-    <div id="admin-msg-toast-sender">Member</div>
-    <div id="admin-msg-toast-body"></div>
+  <!-- message toast -->
+  <div id="jeff-toast" style="display:none;position:fixed;bottom:30px;right:30px;z-index:999999;background:#1a1a1a;border:3px solid #cc0000;border-radius:10px;padding:20px;min-width:350px;color:white;font-size:16px;opacity:1 !important;visibility:visible !important;">
+    <div id="jeff-toast-name" style="color:#cc0000;font-weight:bold;font-size:18px;margin-bottom:8px;"></div>
+    <div id="jeff-toast-msg" style="color:white;margin-bottom:12px;"></div>
+    <button onclick="document.getElementById('jeff-toast').style.setProperty('display','none','important')" style="background:#cc0000;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">Dismiss</button>
+    <button onclick="document.getElementById('jeff-toast').style.setProperty('display','none','important');window.location.href='/admin/messages/dm/'+encodeURIComponent(window._toastEmail||'')" style="background:#333;color:white;border:1px solid #666;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin-left:8px;">Open Chat</button>
   </div>
   <!-- call toast -->
   <div id="global-call-toast-admin" style="
@@ -1785,26 +1779,20 @@
       } catch(e) {}
     }
 
-    // ── Message toast (dismisses after 6s or on click) ────────────────────
-    var _msgToastTimer = null;
-    var _msgToastEmail = null;
-    var msgToast = document.getElementById('admin-msg-toast');
-    function showMsgToast(senderName, preview, memberEmail) {
-      _msgToastEmail = memberEmail;
-      document.getElementById('admin-msg-toast-sender').textContent = senderName;
-      document.getElementById('admin-msg-toast-body').textContent   = preview;
-      msgToast.style.display = 'block';
-      clearTimeout(_msgToastTimer);
-      _msgToastTimer = setTimeout(function(){ msgToast.style.display = 'none'; }, 6000);
-    }
-    msgToast.addEventListener('click', function() {
-      msgToast.style.display = 'none';
-      clearTimeout(_msgToastTimer);
-      var dest = _msgToastEmail
-        ? '/admin/messages/dm/' + encodeURIComponent(_msgToastEmail)
-        : '/admin/messages';
-      window.location.href = dest;
-    });
+    // ── Message toast ─────────────────────────────────────────────────────
+    window._toastEmail = null;
+    window._toastName  = null;
+    window.showAdminToast = function(email, name, msgText) {
+      window._toastEmail = email;
+      window._toastName  = name;
+      var t = document.getElementById('jeff-toast');
+      if (!t) return;
+      document.getElementById('jeff-toast-name').textContent = name || email;
+      document.getElementById('jeff-toast-msg').textContent  = msgText;
+      t.style.setProperty('display',    'block',   'important');
+      t.style.setProperty('opacity',    '1',       'important');
+      t.style.setProperty('visibility', 'visible', 'important');
+    };
 
     // ── Socket setup ─────────────────────────────────────────────────────────
     var adminPendingFrom   = null;
@@ -1819,11 +1807,15 @@
     // ── New message from any member DM ────────────────────────────────────
     socket.on('admin_new_message', function(msg) {
       if (window._adminChatHandlesMsg) return;  // admin_chat.html already shows it
-      var sender  = msg.sender_name || msg.sender_id || 'Member';
+      var sender = msg.display_name || msg.sender_name || msg.sender_id || 'Member';
+      if (sender.indexOf('@') !== -1) {
+        sender = sender.split('@')[0].replace(/[._-]+/g, ' ')
+                       .replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+      }
       var preview = (msg.content || '').substring(0, 80);
       var email   = (msg.chat_id || '').replace(/^dm:/, '');
       playAlert();
-      showMsgToast(sender, preview, email);
+      window.showAdminToast(email, sender, preview);
       browserNotif(
         '💬 ' + sender,
         preview,

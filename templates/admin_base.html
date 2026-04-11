@@ -211,11 +211,11 @@
   #jeff-toast { opacity: 1 !important; visibility: visible !important; }
   /* ── Mini chat popup ─────────────────────────────────────────── */
   #admin-mini-chat{
-    display:none;position:fixed;bottom:24px;right:24px;z-index:99999;
-    width:340px;max-width:calc(100vw - 32px);
+    display:none;position:fixed;bottom:24px;right:24px;z-index:9999999;
+    width:360px;max-width:calc(100vw - 32px);
     background:#18181b;border:1px solid rgba(255,255,255,0.12);
     border-radius:16px;box-shadow:0 8px 36px rgba(0,0,0,0.75);
-    flex-direction:column;overflow:hidden;animation:gchatIn 0.2s ease;
+    flex-direction:column;overflow:visible;animation:gchatIn 0.2s ease;
   }
   #admin-mini-chat-header{
     display:flex;align-items:center;gap:8px;
@@ -234,10 +234,11 @@
   #admin-mini-chat-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px;}
   .amc-msg-jeff  {align-self:flex-end;background:#CC0000;color:#fff;padding:6px 10px;border-radius:10px 10px 2px 10px;font-size:0.84rem;max-width:82%;word-break:break-word;}
   .amc-msg-member{align-self:flex-start;background:rgba(255,255,255,0.09);color:#e4e4e7;padding:6px 10px;border-radius:10px 10px 10px 2px;font-size:0.84rem;max-width:82%;word-break:break-word;}
-  #admin-mini-chat-footer{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,0.08);}
+  #admin-mini-chat-footer{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,0.08);position:relative;z-index:1;}
   #admin-mini-chat-input{
     flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
     border-radius:8px;padding:7px 11px;color:#fff;font-size:0.88rem;outline:none;
+    pointer-events:auto;position:relative;z-index:2;
   }
   #admin-mini-chat-input:focus{border-color:#a78bfa;}
   #admin-mini-chat-send{
@@ -255,7 +256,7 @@
   <div id="jeff-toast-name" style="color:#cc0000;font-weight:bold;font-size:18px;margin-bottom:8px;"></div>
   <div id="jeff-toast-msg" style="color:white;margin-bottom:12px;"></div>
   <button onclick="document.getElementById('jeff-toast').style.display='none'" style="background:#cc0000;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">Dismiss</button>
-  <button onclick="openMiniChat(window._toastEmail,window._toastName)" style="background:#333;color:white;border:1px solid #666;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin-left:8px;">Reply</button>
+  <button onclick="document.getElementById('jeff-toast').style.setProperty('display','none','important');window.openMiniChat(window._toastEmail,window._toastName)" style="background:#333;color:white;border:1px solid #666;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin-left:8px;">Reply</button>
 </div>
 
 <!-- mini chat popup -->
