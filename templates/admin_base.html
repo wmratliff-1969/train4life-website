@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>{% block title %}TRAIN4LIFE Admin{% endblock %}</title>
   {% block head_extra %}{% endblock %}
   <style>
@@ -408,11 +408,12 @@ window.openMiniChat = function(email, senderName) {
     console.log('[openMiniChat] re-parenting #admin-mini-chat to document.body');
     document.body.appendChild(mc);
   }
-  mc.style.setProperty('position',     'fixed', 'important');
-  mc.style.setProperty('bottom',       '24px', 'important');
-  mc.style.setProperty('right',        '0',    'important');
-  mc.style.setProperty('margin-right', '24px', 'important');
-  mc.style.setProperty('left',         'auto', 'important');
+  var rightPos = Math.min(24, window.innerWidth - 384);
+  mc.style.setProperty('position',     'fixed',          'important');
+  mc.style.setProperty('bottom',       '24px',           'important');
+  mc.style.setProperty('right',        rightPos + 'px',  'important');
+  mc.style.setProperty('margin-right', '0',              'important');
+  mc.style.setProperty('left',         'auto',           'important');
   if (mn) mn.textContent = senderName || email;
   if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
   mc.style.setProperty('display', 'flex', 'important');
