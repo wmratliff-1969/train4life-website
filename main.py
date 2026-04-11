@@ -3630,6 +3630,11 @@ def api_incoming_call():
     }})
 
 
+@app.route('/api/version')
+def api_version():
+    return jsonify({"version": "dd4ba53", "socket_admin": True, "built": "2026-04-11"})
+
+
 @app.route('/api/whoami')
 def api_whoami():
     """Debug endpoint — returns current session state so you can verify
