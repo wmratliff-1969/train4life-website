@@ -207,6 +207,8 @@
   @keyframes gctIn   {from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
   @keyframes gmsgIn  {from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
   @keyframes gchatIn {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  /* ── Force toast visible — override any page-level opacity/visibility ── */
+  #jeff-toast { opacity: 1 !important; visibility: visible !important; }
   /* ── Mini chat popup ─────────────────────────────────────────── */
   #admin-mini-chat{
     display:none;position:fixed;bottom:24px;right:24px;z-index:99999;
@@ -249,7 +251,7 @@
 <audio id="admin-alert-audio" src="/static/sounds/message.mp3" preload="auto"></audio>
 
 <!-- message toast -->
-<div id="jeff-toast" style="display:none;position:fixed;bottom:30px;right:30px;z-index:999999;background:#1a1a1a;border:3px solid #cc0000;border-radius:10px;padding:20px;min-width:350px;color:white;font-size:16px;">
+<div id="jeff-toast" style="display:none;position:fixed;bottom:30px;right:30px;z-index:999999;background:#1a1a1a;border:3px solid #cc0000;border-radius:10px;padding:20px;min-width:350px;color:white;font-size:16px;opacity:1 !important;visibility:visible !important;">
   <div id="jeff-toast-name" style="color:#cc0000;font-weight:bold;font-size:18px;margin-bottom:8px;"></div>
   <div id="jeff-toast-msg" style="color:white;margin-bottom:12px;"></div>
   <button onclick="document.getElementById('jeff-toast').style.display='none'" style="background:#cc0000;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">Dismiss</button>
@@ -354,9 +356,10 @@ window.showAdminToast = function(email, name, msgText) {
   if (!t) { console.error('[admin-toast] #jeff-toast element not found!'); return; }
   document.getElementById('jeff-toast-name').textContent = name || email;
   document.getElementById('jeff-toast-msg').textContent  = msgText;
-  t.style.cssText = t.style.cssText.replace(/display\s*:\s*\w+\s*;?/i, '');
-  t.style.display = 'block';
-  console.log('[admin-toast] toast is now visible, display=', t.style.display);
+  t.style.setProperty('display',     'block',   'important');
+  t.style.setProperty('opacity',     '1',       'important');
+  t.style.setProperty('visibility',  'visible', 'important');
+  console.log('[admin-toast] display=', t.style.display, 'visibility=', t.style.visibility, 'opacity=', t.style.opacity);
 };
 
 // Test helper — open browser console and run: window._testToast()
