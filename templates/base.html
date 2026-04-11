@@ -1792,7 +1792,7 @@
       });
       if (rb) rb.addEventListener('click', function() {
         document.getElementById('jeff-toast').style.setProperty('display', 'none', 'important');
-        if (window._toastEmail) window.openMiniChat(window._toastEmail, window._toastName || '');
+        if (window._toastEmail) window.location.href = '/messages/dm/' + window._toastEmail;
       });
       var cb = document.getElementById('admin-mini-chat-close');
       var sb = document.getElementById('admin-mini-chat-send');
