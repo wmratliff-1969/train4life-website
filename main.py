@@ -3643,7 +3643,7 @@ def api_incoming_call():
 
 @app.route('/api/version')
 def api_version():
-    return jsonify({"version": "window-fix-v11", "socket_admin": True, "built": "2026-04-11"})
+    return jsonify({"version": "email-fix-v12", "socket_admin": True, "built": "2026-04-11"})
 
 
 @app.route('/api/whoami')
