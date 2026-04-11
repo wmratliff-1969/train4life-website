@@ -199,5 +199,228 @@
 
 {% block body %}{% endblock %}
 
+{# ── Admin global notifications: new DM messages + incoming video calls ── #}
+{# Covers all admin pages that extend this template (dashboard, members,   #}
+{# settings, etc.).  admin_chat.html extends base.html instead and sets    #}
+{# window._adminChatHandlesMsg / _callHandledByPage to suppress duplicates #}
+<style>
+  @keyframes gctIn  {from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes gmsgIn {from{opacity:0;transform:translateX(-50%) translateY(-10px)} to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  #admin-msg-toast{
+    display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
+    z-index:99998;background:#18181b;border:1px solid rgba(255,255,255,0.12);
+    border-radius:14px;padding:0.85rem 1.2rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
+    min-width:260px;max-width:88vw;cursor:pointer;animation:gmsgIn 0.2s ease;
+  }
+  #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.25rem;}
+  #admin-msg-toast-body  {font-size:0.9rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;}
+</style>
+
+<!-- message toast -->
+<div id="admin-msg-toast">
+  <div id="admin-msg-toast-sender">Member</div>
+  <div id="admin-msg-toast-body"></div>
+</div>
+<!-- call toast -->
+<div id="global-call-toast-admin" style="
+  display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
+  z-index:99999;background:#1e1e1e;border:1px solid rgba(34,185,176,0.5);
+  border-radius:16px;padding:1rem 1.4rem;box-shadow:0 8px 32px rgba(0,0,0,0.7);
+  min-width:280px;max-width:90vw;text-align:center;animation:gctIn 0.25s ease;">
+  <div style="font-size:0.75rem;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#22b9b0;margin-bottom:0.5rem;">📹 Incoming Video Call</div>
+  <div id="gct-admin-caller" style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:0.9rem;">Someone</div>
+  <div style="display:flex;gap:0.7rem;">
+    <button id="gct-admin-accept"  style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Accept</button>
+    <button id="gct-admin-decline" style="flex:1;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✖ Decline</button>
+  </div>
+</div>
+
+<!-- shared in-place call overlay (needed if Jeff accepts via toast) -->
+<div id="gbl-call-overlay" style="display:none;position:fixed;inset:0;z-index:99997;background:#000;">
+  <div id="gbl-waiting" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;">
+    <div style="font-size:3rem;margin-bottom:0.8rem;">📹</div>
+    <div id="gbl-status"    style="font-size:1.1rem;font-weight:700;margin-bottom:0.4rem;">Connecting…</div>
+    <div id="gbl-peer-name" style="font-size:0.85rem;color:rgba(255,255,255,0.5);"></div>
+  </div>
+  <video id="gbl-remote" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;"></video>
+  <video id="gbl-local"  autoplay playsinline muted style="position:absolute;bottom:110px;right:20px;width:160px;aspect-ratio:4/3;background:#111;border-radius:12px;object-fit:cover;display:none;z-index:2;"></video>
+  <button onclick="window._gblEnd()" style="position:absolute;bottom:36px;left:50%;transform:translateX(-50%);background:#e53e3e;color:#fff;border:none;border-radius:50%;width:64px;height:64px;font-size:1.5rem;cursor:pointer;z-index:3;">📵</button>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+// ── Shared call-overlay helpers (needed for Accept on non-chat pages) ─────
+window._gblState = { socket: null, pc: null, localStream: null, remoteSid: null, chatId: null };
+window._gblEnd = function() {
+  var s = window._gblState;
+  if (s.pc)          { s.pc.close(); s.pc = null; }
+  if (s.localStream) { s.localStream.getTracks().forEach(function(t){ t.stop(); }); s.localStream = null; }
+  if (s.socket && s.chatId) s.socket.emit('call_end', { chat_id: s.chatId });
+  var ov = document.getElementById('gbl-call-overlay');
+  var rv = document.getElementById('gbl-remote');
+  var lv = document.getElementById('gbl-local');
+  if (rv) { rv.srcObject = null; rv.style.display = 'none'; }
+  if (lv) { lv.srcObject = null; lv.style.display = 'none'; }
+  if (ov) ov.style.display = 'none';
+  s.remoteSid = null; s.chatId = null; s.socket = null;
+};
+window._gblShow = function(peerName) {
+  var ov = document.getElementById('gbl-call-overlay');
+  var st = document.getElementById('gbl-status');
+  var pn = document.getElementById('gbl-peer-name');
+  if (ov) ov.style.display = 'block';
+  if (st) st.textContent = 'Connecting…';
+  if (pn) pn.textContent = peerName || '';
+};
+window._gblBuildPC = function(socket, peerSid) {
+  var s   = window._gblState;
+  var cfg = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  var pc  = new RTCPeerConnection(cfg);
+  pc.onicecandidate = function(e) {
+    if (e.candidate) socket.emit('call_ice', { to: peerSid, candidate: e.candidate });
+  };
+  pc.ontrack = function(e) {
+    var rv = document.getElementById('gbl-remote');
+    if (rv) { rv.srcObject = e.streams[0]; rv.style.display = 'block'; rv.play().catch(function(){}); }
+    var st = document.getElementById('gbl-status');
+    var wt = document.getElementById('gbl-waiting');
+    if (st) st.textContent = 'Connected';
+    if (wt) wt.style.display = 'none';
+  };
+  return pc;
+};
+</script>
+
+<script>
+(function() {
+  // ── Audio ──────────────────────────────────────────────────────────────────
+  var _audio = null, _audioOk = false;
+  function _unlockAudio() {
+    if (_audioOk) return;
+    try {
+      _audio = new Audio('/static/sounds/message.mp3');
+      _audio.play().then(function(){ _audio.pause(); _audio.currentTime = 0; _audioOk = true; }).catch(function(){});
+    } catch(e) {}
+  }
+  document.addEventListener('click', _unlockAudio, { once: true });
+  function playAlert() {
+    _unlockAudio();
+    if (!_audioOk) return;
+    try { _audio.currentTime = 0; _audio.play().catch(function(){}); } catch(e) {}
+  }
+
+  // ── Browser notification permission ───────────────────────────────────────
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  function browserNotif(title, body, onclick) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      var n = new Notification(title, { body: body, icon: '/static/images/logo.png' });
+      if (onclick) n.onclick = function() { window.focus(); onclick(); n.close(); };
+    } catch(e) {}
+  }
+
+  // ── Message toast ─────────────────────────────────────────────────────────
+  var _msgTimer = null, _msgEmail = null;
+  var msgToast  = document.getElementById('admin-msg-toast');
+  function showMsgToast(senderName, preview, memberEmail) {
+    _msgEmail = memberEmail;
+    document.getElementById('admin-msg-toast-sender').textContent = senderName;
+    document.getElementById('admin-msg-toast-body').textContent   = preview;
+    msgToast.style.display = 'block';
+    clearTimeout(_msgTimer);
+    _msgTimer = setTimeout(function(){ msgToast.style.display = 'none'; }, 6000);
+  }
+  msgToast.addEventListener('click', function() {
+    msgToast.style.display = 'none';
+    clearTimeout(_msgTimer);
+    window.location.href = _msgEmail
+      ? '/admin/messages/dm/' + encodeURIComponent(_msgEmail)
+      : '/admin/messages';
+  });
+
+  // ── Socket ────────────────────────────────────────────────────────────────
+  var adminPendingFrom = null, adminPendingChatId = null;
+  var socket = io();
+
+  socket.on('connect', function() {
+    socket.emit('join_call_room',          { chat_id: 'admin' });
+    socket.emit('join_admin_notifications');
+  });
+
+  // New message from any member DM
+  socket.on('admin_new_message', function(msg) {
+    var sender  = msg.sender_name || msg.sender_id || 'Member';
+    var preview = (msg.content || '').substring(0, 80);
+    var email   = (msg.chat_id  || '').replace(/^dm:/, '');
+    playAlert();
+    showMsgToast(sender, preview, email);
+    browserNotif('💬 ' + sender, preview, function() {
+      window.location.href = '/admin/messages/dm/' + encodeURIComponent(email);
+    });
+  });
+
+  // Incoming video call
+  socket.on('call_invite', function(data) {
+    adminPendingFrom   = data.from;
+    adminPendingChatId = data.chat_id || '';
+    var callerName = data.caller_name || 'Someone';
+    var el = document.getElementById('gct-admin-caller');
+    if (el) el.textContent = callerName;
+    document.getElementById('global-call-toast-admin').style.display = 'block';
+    playAlert();
+    browserNotif('📹 Incoming Video Call', callerName + ' is calling — click to answer', function() {
+      document.getElementById('gct-admin-accept').click();
+    });
+  });
+
+  document.getElementById('gct-admin-accept').addEventListener('click', async function() {
+    document.getElementById('global-call-toast-admin').style.display = 'none';
+    if (!adminPendingFrom) return;
+    var s = window._gblState;
+    s.socket = socket; s.remoteSid = adminPendingFrom; s.chatId = adminPendingChatId;
+    var callerName = (document.getElementById('gct-admin-caller') || {}).textContent || 'Someone';
+    adminPendingFrom = null; adminPendingChatId = null;
+    socket.emit('call_accept', { to: s.remoteSid });
+    window._gblShow(callerName);
+  });
+
+  document.getElementById('gct-admin-decline').addEventListener('click', function() {
+    document.getElementById('global-call-toast-admin').style.display = 'none';
+    if (adminPendingFrom) socket.emit('call_decline', { to: adminPendingFrom });
+    adminPendingFrom = null; adminPendingChatId = null;
+  });
+
+  // WebRTC signaling (Jeff as callee)
+  socket.on('call_offer', async function(data) {
+    var s = window._gblState;
+    if (!s.remoteSid) return;
+    s.remoteSid = data.from;
+    try {
+      s.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      var lv = document.getElementById('gbl-local');
+      if (lv) { lv.srcObject = s.localStream; lv.style.display = 'block'; lv.play().catch(function(){}); }
+      s.pc = window._gblBuildPC(socket, s.remoteSid);
+      s.localStream.getTracks().forEach(function(t) { s.pc.addTrack(t, s.localStream); });
+      await s.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+      var answer = await s.pc.createAnswer();
+      await s.pc.setLocalDescription(answer);
+      socket.emit('call_answer', { to: s.remoteSid, answer: answer });
+    } catch(err) {
+      var st = document.getElementById('gbl-status');
+      if (st) st.textContent = 'Camera error: ' + err.message;
+    }
+  });
+
+  socket.on('call_ice', function(data) {
+    var s = window._gblState;
+    if (s.pc && data.candidate) s.pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
+  });
+
+  socket.on('call_end', function() { window._gblEnd(); });
+})();
+</script>
+
 </body>
 </html>
