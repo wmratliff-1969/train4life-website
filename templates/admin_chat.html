@@ -560,8 +560,10 @@ if (inp) {
   document.head.appendChild(sioScript);
 
   function initSocket() {
-    // Tell the global admin toast to stand down — this page handles calls directly
-    window._callHandledByPage = true;
+    // Tell the global admin toast to stand down — this page handles both
+    // calls and messages directly (member already visible on screen)
+    window._callHandledByPage  = true;
+    window._adminChatHandlesMsg = true;
     var socket = io({transports:['websocket'],upgrade:false});
 
     // ── Track call state ──────────────────────────────────────────────

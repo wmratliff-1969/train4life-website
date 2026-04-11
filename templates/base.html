@@ -1714,15 +1714,32 @@
   </script>
   {% endif %}
 
-  {# ── Admin global incoming-call toast (Jeff) — shows when a member calls from any page ── #}
+  {# ── Admin global notifications: new messages + incoming calls (any page) ── #}
   {% if session.get('is_admin') %}
+  <style>
+    @keyframes gctIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+    @keyframes gmsgIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+    #admin-msg-toast{
+      display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
+      z-index:99998;background:#18181b;border:1px solid rgba(255,255,255,0.12);
+      border-radius:14px;padding:0.85rem 1.2rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
+      min-width:260px;max-width:88vw;cursor:pointer;animation:gmsgIn 0.2s ease;
+    }
+    #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.25rem;}
+    #admin-msg-toast-body{font-size:0.9rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;}
+  </style>
+  <!-- message toast (click → messages page) -->
+  <div id="admin-msg-toast">
+    <div id="admin-msg-toast-sender">Member</div>
+    <div id="admin-msg-toast-body"></div>
+  </div>
+  <!-- call toast -->
   <div id="global-call-toast-admin" style="
     display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%);
     z-index:99999; background:#1e1e1e; border:1px solid rgba(34,185,176,0.5);
     border-radius:16px; padding:1rem 1.4rem; box-shadow:0 8px 32px rgba(0,0,0,0.7);
     min-width:280px; max-width:90vw; text-align:center;
     animation:gctIn 0.25s ease;">
-    <style>@keyframes gctIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
     <div style="font-size:0.75rem;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#22b9b0;margin-bottom:0.5rem;">📹 Incoming Video Call</div>
     <div id="gct-admin-caller" style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:0.9rem;">Someone</div>
     <div style="display:flex;gap:0.7rem;">
@@ -1730,29 +1747,108 @@
       <button id="gct-admin-decline" style="flex:1;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0.6rem;font-size:0.9rem;font-weight:700;cursor:pointer;">✖ Decline</button>
     </div>
   </div>
+
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
   (function() {
+    // ── Audio setup ──────────────────────────────────────────────────────────
+    var _audio   = null;
+    var _audioOk = false;
+    function _unlockAudio() {
+      if (_audioOk) return;
+      try {
+        _audio = new Audio('/static/sounds/message.mp3');
+        _audio.play().then(function(){ _audio.pause(); _audio.currentTime = 0; _audioOk = true; }).catch(function(){});
+      } catch(e) {}
+    }
+    document.addEventListener('click', _unlockAudio, { once: true });
+
+    function playAlert() {
+      _unlockAudio();
+      if (!_audioOk) return;
+      try { _audio.currentTime = 0; _audio.play().catch(function(){}); } catch(e) {}
+    }
+
+    // ── Browser notification permission ──────────────────────────────────────
+    // Request immediately — admin doesn't need a user-gesture gate since
+    // they're actively managing the site and expect alerts.
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    function browserNotif(title, body, onclick) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      try {
+        var n = new Notification(title, { body: body, icon: '/static/images/logo.png' });
+        if (onclick) n.onclick = function() { window.focus(); onclick(); n.close(); };
+      } catch(e) {}
+    }
+
+    // ── Message toast (dismisses after 6s or on click) ────────────────────
+    var _msgToastTimer = null;
+    var _msgToastEmail = null;
+    var msgToast = document.getElementById('admin-msg-toast');
+    function showMsgToast(senderName, preview, memberEmail) {
+      _msgToastEmail = memberEmail;
+      document.getElementById('admin-msg-toast-sender').textContent = senderName;
+      document.getElementById('admin-msg-toast-body').textContent   = preview;
+      msgToast.style.display = 'block';
+      clearTimeout(_msgToastTimer);
+      _msgToastTimer = setTimeout(function(){ msgToast.style.display = 'none'; }, 6000);
+    }
+    msgToast.addEventListener('click', function() {
+      msgToast.style.display = 'none';
+      clearTimeout(_msgToastTimer);
+      var dest = _msgToastEmail
+        ? '/admin/messages/dm/' + encodeURIComponent(_msgToastEmail)
+        : '/admin/messages';
+      window.location.href = dest;
+    });
+
+    // ── Socket setup ─────────────────────────────────────────────────────────
     var adminPendingFrom   = null;
     var adminPendingChatId = null;
     var socket = io();
 
     socket.on('connect', function() {
-      // Join the admin call room so members' call_invite events reach Jeff globally
-      socket.emit('join_call_room', { chat_id: 'admin' });
+      socket.emit('join_call_room',          { chat_id: 'admin' });
+      socket.emit('join_admin_notifications');
     });
 
-    // Incoming call from a member — show toast on any admin page
+    // ── New message from any member DM ────────────────────────────────────
+    socket.on('admin_new_message', function(msg) {
+      if (window._adminChatHandlesMsg) return;  // admin_chat.html already shows it
+      var sender  = msg.sender_name || msg.sender_id || 'Member';
+      var preview = (msg.content || '').substring(0, 80);
+      var email   = (msg.chat_id || '').replace(/^dm:/, '');
+      playAlert();
+      showMsgToast(sender, preview, email);
+      browserNotif(
+        '💬 ' + sender,
+        preview,
+        function() { window.location.href = '/admin/messages/dm/' + encodeURIComponent(email); }
+      );
+    });
+
+    // ── Incoming video call from a member ─────────────────────────────────
     socket.on('call_invite', function(data) {
-      if (window._callHandledByPage) return;  // admin_chat.html handles its own calls
+      if (window._callHandledByPage) return;
       adminPendingFrom   = data.from;
       adminPendingChatId = data.chat_id || '';
+      var callerName = data.caller_name || 'Someone';
       var el = document.getElementById('gct-admin-caller');
-      if (el) el.textContent = data.caller_name || 'Someone';
+      if (el) el.textContent = callerName;
       document.getElementById('global-call-toast-admin').style.display = 'block';
+      playAlert();
+      browserNotif(
+        '📹 Incoming Video Call',
+        callerName + ' is calling — click to answer',
+        function() { document.getElementById('gct-admin-accept').click(); }
+      );
     });
 
-    // Accept: start call in-place via global overlay, no navigation needed
+    // ── Accept call ───────────────────────────────────────────────────────
     document.getElementById('gct-admin-accept').addEventListener('click', async function() {
       document.getElementById('global-call-toast-admin').style.display = 'none';
       if (!adminPendingFrom) return;
@@ -1772,7 +1868,7 @@
       adminPendingFrom = null; adminPendingChatId = null;
     });
 
-    // Callee: receive call_offer, complete WebRTC handshake
+    // ── WebRTC signaling (callee side) ─────────────────────────────────────
     socket.on('call_offer', async function(data) {
       var s = window._gblState;
       if (!s.remoteSid || window._callHandledByPage) return;
@@ -1794,9 +1890,8 @@
 
     socket.on('call_ice', function(data) {
       var s = window._gblState;
-      if (s.pc && data.candidate && !window._callHandledByPage) {
+      if (s.pc && data.candidate && !window._callHandledByPage)
         s.pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function(){});
-      }
     });
 
     socket.on('call_end', function() {

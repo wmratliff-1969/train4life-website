@@ -632,6 +632,13 @@ def _post_and_broadcast(chat_id, sender_id, sender_name, content, is_admin=False
             socketio.emit('new_message', msg, to=f'chat:{chat_id}')
         except Exception:
             pass
+        # Notify Jeff globally whenever a member sends a DM so any admin page
+        # can show a browser notification + sound without polling.
+        if not is_admin and chat_id.startswith('dm:'):
+            try:
+                socketio.emit('admin_new_message', msg, to='admin_notifications')
+            except Exception:
+                pass
     return msg
 
 def _member_dm_id(email1, email2):
@@ -3393,6 +3400,12 @@ if _SIO_OK and socketio:
     # ── Peer-to-peer video call signaling ────────────────────────────────────
     # Each DM chat gets a call room: call:<chat_id>
     # Server only relays — no media touches the server.
+
+    @socketio.on('join_admin_notifications')
+    def _sio_join_admin_notifications():
+        """Admin joins a dedicated room to receive new-message alerts from any DM."""
+        if session.get('is_admin'):
+            _sio_join('admin_notifications')
 
     @socketio.on('join_call_room')
     def _sio_join_call_room(data):
