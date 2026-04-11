@@ -211,7 +211,7 @@
   #jeff-toast { opacity: 1 !important; visibility: visible !important; }
   /* ── Mini chat popup ─────────────────────────────────────────── */
   #admin-mini-chat{
-    display:none;position:fixed;bottom:24px;right:24px;z-index:9999999;
+    display:none;position:fixed;bottom:24px;right:0;margin-right:24px;z-index:9999999;
     width:360px;max-width:calc(100vw - 48px);box-sizing:border-box;
     background:#18181b;border:1px solid rgba(255,255,255,0.12);
     border-radius:16px;box-shadow:0 8px 36px rgba(0,0,0,0.75);
@@ -408,10 +408,11 @@ window.openMiniChat = function(email, senderName) {
     console.log('[openMiniChat] re-parenting #admin-mini-chat to document.body');
     document.body.appendChild(mc);
   }
-  mc.style.setProperty('position',  'fixed',  'important');
-  mc.style.setProperty('bottom',    '24px',   'important');
-  mc.style.setProperty('right',     '24px',   'important');
-  mc.style.setProperty('left',      'auto',   'important');
+  mc.style.setProperty('position',     'fixed', 'important');
+  mc.style.setProperty('bottom',       '24px', 'important');
+  mc.style.setProperty('right',        '0',    'important');
+  mc.style.setProperty('margin-right', '24px', 'important');
+  mc.style.setProperty('left',         'auto', 'important');
   if (mn) mn.textContent = senderName || email;
   if (mf) mf.href = '/admin/messages/dm/' + encodeURIComponent(email);
   mc.style.setProperty('display', 'flex', 'important');
