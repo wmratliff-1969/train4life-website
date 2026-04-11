@@ -636,7 +636,12 @@ def _post_and_broadcast(chat_id, sender_id, sender_name, content, is_admin=False
         # can show a browser notification + sound without polling.
         if not is_admin and chat_id.startswith('dm:'):
             try:
-                socketio.emit('admin_new_message', msg, to='admin_notifications')
+                member_email = chat_id[3:]
+                users = _load_users()
+                display_name = (users.get(member_email) or {}).get('name') or \
+                               member_email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
+                notify_msg = dict(msg, display_name=display_name)
+                socketio.emit('admin_new_message', notify_msg, to='admin_notifications')
             except Exception:
                 pass
     return msg

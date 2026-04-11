@@ -205,20 +205,21 @@
 {# window._adminChatHandlesMsg / _callHandledByPage to suppress duplicates #}
 <style>
   @keyframes gctIn   {from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-  @keyframes gmsgIn  {from{opacity:0;transform:translateX(-50%) translateY(-10px)} to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes gmsgIn  {from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
   @keyframes gchatIn {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   #admin-msg-toast{
-    display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
-    z-index:99998;background:#0f0f0f;border:2px solid rgba(167,139,250,0.5);
-    border-radius:16px;padding:1rem 1.1rem 1rem 1.3rem;box-shadow:0 10px 40px rgba(0,0,0,0.85);
-    min-width:320px;max-width:92vw;align-items:center;gap:14px;
+    display:none;position:fixed;bottom:24px;right:24px;
+    z-index:99998;background:#1a1a1a;border:2px solid #a78bfa;
+    border-radius:16px;padding:1rem 1rem 1rem 1.3rem;
+    box-shadow:0 16px 48px rgba(0,0,0,0.9),0 0 0 1px rgba(167,139,250,0.15);
+    min-width:380px;max-width:calc(100vw - 48px);align-items:center;gap:14px;cursor:pointer;
   }
-  #admin-msg-toast.showing{animation:gmsgIn 0.2s ease;}
-  #admin-msg-toast-text{flex:1;cursor:pointer;min-width:0;}
-  #admin-msg-toast-sender{font-size:1rem;font-weight:900;color:#a78bfa;margin-bottom:0.3rem;letter-spacing:0.01em;}
+  #admin-msg-toast.showing{animation:gmsgIn 0.22s ease;}
+  #admin-msg-toast-text{flex:1;min-width:0;}
+  #admin-msg-toast-sender{font-size:1.05rem;font-weight:900;color:#CC0000;margin-bottom:0.3rem;letter-spacing:0.01em;}
   #admin-msg-toast-body  {font-size:1rem;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  #admin-msg-toast-x{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:1.2rem;cursor:pointer;padding:6px 10px;flex-shrink:0;line-height:1;border-radius:8px;}
-  #admin-msg-toast-x:hover{background:rgba(255,255,255,0.2);}
+  #admin-msg-toast-x{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:1.2rem;cursor:pointer;padding:7px 11px;flex-shrink:0;line-height:1;border-radius:8px;}
+  #admin-msg-toast-x:hover{background:rgba(255,255,255,0.25);}
   /* ── Mini chat popup ─────────────────────────────────────────── */
   #admin-mini-chat{
     display:none;position:fixed;bottom:24px;right:24px;z-index:99999;
@@ -396,12 +397,11 @@ window._gblBuildPC = function(socket, peerSid) {
     msgToast.style.display = 'none';
   }
 
-  // Click on text → open mini chat
-  document.getElementById('admin-msg-toast-text').addEventListener('click', function() {
+  // Click anywhere on toast → open mini chat; X stops propagation and only dismisses
+  msgToast.addEventListener('click', function() {
     dismissMsgToast();
     if (_msgEmail) openMiniChat(_msgEmail, _msgSender);
   });
-  // X button → just dismiss
   document.getElementById('admin-msg-toast-x').addEventListener('click', function(e) {
     e.stopPropagation();
     dismissMsgToast();
@@ -506,7 +506,13 @@ window._gblBuildPC = function(socket, peerSid) {
 
   // New message from any member DM
   socket.on('admin_new_message', function(msg) {
-    var sender  = msg.sender_name || msg.sender_id || 'Member';
+    // display_name is injected server-side; fall back to sender_name; clean up emails
+    var sender = msg.display_name || msg.sender_name || msg.sender_id || 'Member';
+    if (sender.indexOf('@') !== -1) {
+      // looks like an email — convert "mark.ratliff@domain.com" → "Mark Ratliff"
+      sender = sender.split('@')[0].replace(/[._-]+/g, ' ')
+                     .replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    }
     var preview = (msg.content || '').substring(0, 80);
     var email   = (msg.chat_id  || '').replace(/^dm:/, '');
     miniChatHandleIncoming(msg);   // append to mini chat if open for this member
