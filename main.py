@@ -2290,6 +2290,19 @@ def api_video_start():
     print(f'=== FOUND ROOM: {existing} ===')
     if existing and existing['expires_at'] > time.time():
         print(f'=== VIDEO JOIN EXISTING ROOM: chat={chat_id} url={existing["url"]} ===')
+        # Still fire APNs push — Jeff re-tapped call, member may not have seen it
+        if is_admin and chat_id.startswith('dm:'):
+            target_email = chat_id[3:]
+            _push_to_member(target_email,
+                            '📹 Incoming Video Call',
+                            'Jeff is calling you — tap to answer',
+                            'video_call',
+                            extra={
+                                'action':    'incoming_call',
+                                'call_type': 'video',
+                                'caller':    'Jeff',
+                                'url':       '/video-jeff',
+                            })
         return jsonify({'url': existing['url'], 'room': existing['room']})
 
     # ── Create new Daily.co room ──────────────────────────────────────────────
@@ -2328,9 +2341,15 @@ def api_video_start():
         # Jeff is calling a specific member — target them directly
         target_email = chat_id[3:]
         _push_to_member(target_email,
-                        '📹 Jeff is calling you!',
-                        'Tap to join the video call',
-                        'video_call')
+                        '📹 Incoming Video Call',
+                        'Jeff is calling you — tap to answer',
+                        'video_call',
+                        extra={
+                            'action':    'incoming_call',
+                            'call_type': 'video',
+                            'caller':    'Jeff',
+                            'url':       '/video-jeff',
+                        })
 
     return jsonify({'url': room_url, 'room': room_name})
 
@@ -3394,9 +3413,14 @@ if _SIO_OK and socketio:
                 _push_to_member(
                     member_email,
                     '📹 Incoming Video Call',
-                    'Jeff is calling you \u2014 tap to answer',
+                    f'{caller_name} is calling you \u2014 tap to answer',
                     'video_call',
-                    extra={'url': '/video-jeff'},
+                    extra={
+                        'action':    'incoming_call',
+                        'call_type': 'video',
+                        'caller':    caller_name,
+                        'url':       '/video-jeff',
+                    },
                 )
 
             payload = {'from': request.sid, 'caller_name': caller_name, 'chat_id': chat_id}
@@ -3533,7 +3557,12 @@ def api_incoming_call():
                     '📹 Incoming Video Call',
                     f'{caller_name} is calling you \u2014 tap to answer',
                     'video_call',
-                    extra={'url': '/video-jeff'},
+                    extra={
+                        'action':    'incoming_call',
+                        'call_type': 'video',
+                        'caller':    caller_name,
+                        'url':       '/video-jeff',
+                    },
                 )
             return jsonify({'ok': True})
         else:
