@@ -1,3 +1,4 @@
+# Deploy: 2026-04-10 — force fresh Render build to pick up APNS env vars
 from flask import (Flask, render_template, redirect, url_for, session,
                    request, jsonify, flash, Response)
 import os, json, hashlib, datetime, re, base64, uuid, threading, time, secrets
@@ -746,10 +747,13 @@ def _send_onesignal_push_msg(heading, body_text, segment='All', filters=None):
 
 def _send_apns_push(device_token, title, body, extra_data=None, notif_type='message'):
     """Send a push notification directly via APNs HTTP/2 using .p8 JWT auth.
-    Reads APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_KEY from env vars first;
-    falls back to the apns_config Redis key if any env var is missing.
+    Resolution order for config values:
+      1. Env vars  (APNS_KEY_ID / APNS_TEAM_ID / APNS_BUNDLE_ID / APNS_KEY)
+      2. Redis     (apns_config key, seeded at startup via /api/admin/seed-apns)
+      3. Hardcoded (key_id / team_id / bundle_id only — key_pem must come from Redis)
     Set APNS_SANDBOX=true for Xcode development builds (uses sandbox endpoint).
     """
+    # ── Layer 1: env vars ────────────────────────────────────────────────────
     key_id    = os.environ.get('APNS_KEY_ID', '').strip()
     team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
     bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
@@ -759,7 +763,7 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
 
     config_source = 'env'
     if not all([key_id, team_id, bundle_id, key_pem]):
-        # Env vars missing — try Redis fallback (seeded at startup)
+        # ── Layer 2: Redis fallback (seeded at startup) ──────────────────────
         redis_cfg = _redis_get_apns_config()
         if redis_cfg:
             key_id    = key_id    or redis_cfg.get('key_id', '')
@@ -772,6 +776,21 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
             print('[APNs] ⚠️  env vars incomplete — loaded config from Redis', flush=True)
         else:
             print('[APNs] ⚠️  env vars incomplete and Redis has no apns_config', flush=True)
+
+    # ── Layer 3: hardcoded last-resort (key_id / team_id / bundle_id only) ──
+    # key_pem cannot be hardcoded — it must come from env or Redis.
+    if not key_id:
+        key_id = 'BFT4WV7A5Z'
+        config_source = 'hardcoded'
+        print('[APNs] ⚠️  using hardcoded APNS_KEY_ID', flush=True)
+    if not team_id:
+        team_id = 'RXAWNC4W5N'
+        config_source = 'hardcoded'
+        print('[APNs] ⚠️  using hardcoded APNS_TEAM_ID', flush=True)
+    if not bundle_id:
+        bundle_id = 'life.train4life.app'
+        config_source = 'hardcoded'
+        print('[APNs] ⚠️  using hardcoded APNS_BUNDLE_ID', flush=True)
 
     print(f'[APNs] config (source={config_source}): key_id={key_id!r} team_id={team_id!r} bundle_id={bundle_id!r} sandbox={sandbox} key_pem_len={len(key_pem)} token_len={len(device_token)}')
 
