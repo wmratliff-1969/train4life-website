@@ -1,0 +1,103 @@
+{% extends "admin_base.html" %}
+{% block title %}Resources — TRAIN4LIFE Admin{% endblock %}
+{% block nav_resources %}active{% endblock %}
+
+{% block body %}
+<div class="a-page">
+
+  <div class="a-page-header">
+    <div class="a-breadcrumb"><a href="/admin/dashboard">Dashboard</a> / Resources</div>
+    <h1>📚 Admin Resources</h1>
+    <p>PDF guides, walkthrough script, and the interactive tour — everything you need to run TRAIN4LIFE.</p>
+  </div>
+
+  <!-- PDF Downloads -->
+  <div style="font-size:0.7rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#CC0000;margin-bottom:14px;">📄 PDF Downloads</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px;margin-bottom:36px;">
+
+    <div class="a-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:2rem;line-height:1;">📘</div>
+      <div>
+        <div style="font-size:0.95rem;font-weight:800;color:#111;margin-bottom:4px;">Admin Complete Guide</div>
+        <div style="font-size:0.82rem;color:#71717a;line-height:1.5;">
+          Full reference covering every admin section — Dashboard, Members, Messages, Video Calls, Live Controls, App Content, PDFs, Notifications, and Stripe.
+        </div>
+        <div style="font-size:0.72rem;color:#a1a1aa;margin-top:6px;">PDF · Last updated Apr 2026 · CONFIDENTIAL</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="a-btn a-btn-primary" href="/static/admin/Train4Life_Admin_Complete_Guide.pdf" download>⬇ Download PDF</a>
+        <a class="a-btn a-btn-ghost" href="/static/admin/Train4Life_Admin_Complete_Guide.pdf" target="_blank">👁 View</a>
+      </div>
+    </div>
+
+    <div class="a-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:2rem;line-height:1;">🎬</div>
+      <div>
+        <div style="font-size:0.95rem;font-weight:800;color:#111;margin-bottom:4px;">Admin Walkthrough Script</div>
+        <div style="font-size:0.82rem;color:#71717a;line-height:1.5;">
+          Full narration script for recording a ~15-minute admin walkthrough video. 9 segments with on-screen cues, narration text, and production notes.
+        </div>
+        <div style="font-size:0.72rem;color:#a1a1aa;margin-top:6px;">PDF · Last updated Apr 2026 · Internal Use Only</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="a-btn a-btn-primary" href="/static/admin/Train4Life_Admin_Walkthrough_Script.pdf" download>⬇ Download PDF</a>
+        <a class="a-btn a-btn-ghost" href="/static/admin/Train4Life_Admin_Walkthrough_Script.pdf" target="_blank">👁 View</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Interactive Tour -->
+  <div style="font-size:0.7rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#CC0000;margin-bottom:14px;">🎯 Interactive Tour</div>
+
+  <div class="a-card" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:36px;">
+    <div style="font-size:2rem;flex-shrink:0;">▶️</div>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-size:0.95rem;font-weight:800;color:#111;margin-bottom:4px;">Guided Admin Tour</div>
+      <div style="font-size:0.82rem;color:#71717a;line-height:1.5;">
+        Step-by-step walkthrough of every admin section with live tooltips — Dashboard stats, Live Controls, Members, Messages, App Content, and notification system.
+      </div>
+    </div>
+    <button onclick="startAdminTour()" class="a-btn a-btn-primary" style="flex-shrink:0;white-space:nowrap;">▶ Launch Tour</button>
+  </div>
+
+  <!-- Video Walkthrough -->
+  <div style="font-size:0.7rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#CC0000;margin-bottom:14px;">🎥 Video Walkthrough</div>
+
+  <div class="a-card" style="margin-bottom:36px;">
+    <div style="background:#f4f4f5;border:2px dashed #d1d5db;border-radius:10px;padding:48px 24px;text-align:center;color:#a1a1aa;">
+      <div style="font-size:2.5rem;margin-bottom:12px;">▶️</div>
+      <div style="font-size:0.95rem;font-weight:700;color:#71717a;margin-bottom:6px;">Walkthrough Video — Coming Soon</div>
+      <div style="font-size:0.82rem;color:#a1a1aa;">Record using the script PDF above, then embed the video URL here.</div>
+    </div>
+  </div>
+
+  <!-- Quick Reference -->
+  <div style="font-size:0.7rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#CC0000;margin-bottom:14px;">⚡ Quick Reference</div>
+
+  <div class="a-card">
+    <div class="a-card-head">Admin URLs</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">
+      {% set links = [
+        ('/admin/dashboard', 'Dashboard', 'Stats, live status, quick nav'),
+        ('/admin/live', 'Live Controls', 'Status, countdown, broadcast'),
+        ('/admin/members', 'Members', 'Subscriber list, DM links'),
+        ('/admin/messages', 'Messages', 'All DM conversations'),
+        ('/admin/app-content', 'App Content', 'iOS app video playlists'),
+        ('/admin/pdfs', 'PDFs', 'Upload study guides'),
+        ('/admin/guide', 'Admin Guide', 'Embedded PDF viewer'),
+        ('/admin/resources', 'Resources', 'This page'),
+      ] %}
+      {% for url, name, desc in links %}
+      <a href="{{ url }}" style="display:block;background:#f9fafb;border:1px solid #e4e4e7;border-radius:8px;padding:12px 14px;text-decoration:none;transition:border-color 0.15s;" onmouseover="this.style.borderColor='#CC0000'" onmouseout="this.style.borderColor='#e4e4e7'">
+        <div style="font-size:0.8rem;font-weight:800;color:#111;margin-bottom:2px;">{{ name }}</div>
+        <div style="font-size:0.72rem;color:#71717a;">{{ desc }}</div>
+        <div style="font-size:0.65rem;color:#CC0000;margin-top:4px;font-weight:600;">{{ url }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

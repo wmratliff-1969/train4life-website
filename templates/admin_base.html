@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TRAIN4LIFE Admin{% endblock %}</title>
   {% block head_extra %}{% endblock %}
+  <!-- Shepherd.js guided tour -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shepherd.js@11/dist/css/shepherd.css">
+  <script src="https://cdn.jsdelivr.net/npm/shepherd.js@11/dist/js/shepherd.min.js"></script>
+  <style>
+  /* ── Shepherd tour overrides (admin theme) ── */
+  .shepherd-element { max-width: 320px; }
+  .shepherd-content { background: #18181b; border: 1px solid #3f3f46; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.55); }
+  .shepherd-header { background: #CC0000; border-radius: 10px 10px 0 0; padding: 12px 16px 10px; }
+  .shepherd-title { font-size: 0.78rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+  .shepherd-cancel-icon { color: rgba(255,255,255,0.7); }
+  .shepherd-cancel-icon:hover { color: #fff; }
+  .shepherd-text { color: #a1a1aa; font-size: 0.85rem; line-height: 1.55; padding: 12px 16px; }
+  .shepherd-text strong { color: #fff; }
+  .shepherd-text a { color: #f87171; }
+  .shepherd-footer { padding: 8px 16px 12px; display: flex; justify-content: space-between; gap: 8px; }
+  .shepherd-button { border-radius: 6px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; padding: 7px 14px; border: none; cursor: pointer; transition: filter 0.15s; }
+  .shepherd-button-primary { background: #CC0000; color: #fff; }
+  .shepherd-button-primary:hover { filter: brightness(1.12); }
+  .shepherd-button-secondary { background: transparent; color: #71717a; border: 1px solid #3f3f46; }
+  .shepherd-button-secondary:hover { color: #a1a1aa; border-color: #52525b; }
+  .shepherd-arrow:before { background: #18181b; }
+  </style>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f4f4f5; color: #111; min-height: 100vh; }
@@ -193,6 +215,8 @@
     <a href="/admin/members" class="a-nav-link {% block nav_members %}{% endblock %}">Members</a>
   </div>
   <div class="a-nav-right">
+    <a href="/admin/resources" class="a-nav-logout" style="color:#a1a1aa;">Resources</a>
+    <button onclick="startAdminTour()" style="font-size:0.78rem;font-weight:700;color:#CC0000;background:rgba(204,0,0,0.1);border:1px solid rgba(204,0,0,0.35);border-radius:6px;padding:5px 12px;cursor:pointer;letter-spacing:0.3px;flex-shrink:0;" id="adminTourBtn">▶ Tour</button>
     <a href="/admin/logout" class="a-nav-logout">Sign out</a>
   </div>
 </nav>
@@ -611,6 +635,140 @@ if (_adminSocket) {
 }
 
 console.log('[admin notify] system loaded. Run window._testToast() to test.');
+</script>
+
+<!-- ── SHEPHERD.JS ADMIN GUIDED TOUR ───────────────────────────────────────── -->
+<script>
+function startAdminTour() {
+  if (typeof Shepherd === 'undefined') {
+    alert('Tour could not load. Check your connection and try again.');
+    return;
+  }
+
+  var tour = new Shepherd.Tour({
+    useModalOverlay: true,
+    defaultStepOptions: {
+      scrollTo: { behavior: 'smooth', block: 'center' },
+      cancelIcon: { enabled: true },
+      canClickTarget: false,
+      popperOptions: { modifiers: [{ name: 'offset', options: { offset: [0, 12] } }] }
+    }
+  });
+
+  function has(sel) { return !!document.querySelector(sel); }
+  function p(label, action, type) {
+    return { text: label, action: action, classes: type === 'primary' ? 'shepherd-button-primary' : 'shepherd-button-secondary' };
+  }
+
+  tour.addStep({
+    id: 'welcome',
+    title: '🎛️ Admin Panel Tour',
+    text: 'Welcome to the TRAIN4LIFE admin panel. This tour covers every major section — Dashboard, Live Controls, Members, Messages, App Content, and more.<br><br><strong>Click Next to begin.</strong>',
+    buttons: [p('Skip', tour.cancel.bind(tour), 'secondary'), p('Start →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'nav',
+    title: 'Top Navigation',
+    text: 'The nav bar gives you one-click access to every section: <strong>Dashboard, Live, App Content, PDFs, Guide, Members</strong>.<br><br>The <strong>Resources</strong> link opens the admin resource library with PDF guides and this tour.',
+    attachTo: { element: '.a-nav', on: 'bottom' },
+    when: { show: function() { if (!has('.a-nav')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'dashboard',
+    title: 'Dashboard',
+    text: 'The Dashboard shows your key metrics at a glance: <strong>Revenue (MRR), Subscribers, App Videos,</strong> and <strong>Total Videos</strong> — all pulled live from Stripe and your content library.<br><br>The live status bar shows whether you\'re Off Air, in Countdown, or Live.',
+    attachTo: { element: '.a-stats', on: 'bottom' },
+    when: { show: function() { if (!has('.a-stats')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'live-bar',
+    title: 'Live Status',
+    text: 'This bar shows the current broadcast status. Click <strong>Change →</strong> to go to Live Controls where you can set Countdown mode, go Live, or start a WebRTC broadcast directly from your browser.',
+    attachTo: { element: '.a-live-bar', on: 'bottom' },
+    when: { show: function() { if (!has('.a-live-bar')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'nav-cards',
+    title: 'Quick Navigation',
+    text: 'These cards are shortcuts to every admin section. Click any card to jump there instantly.<br><br>You can also get to everything through the top nav bar.',
+    attachTo: { element: '.a-nav-cards', on: 'top' },
+    when: { show: function() { if (!has('.a-nav-cards')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'message-toast',
+    title: 'Message Notifications',
+    text: 'When a member sends you a DM, a <strong>toast notification</strong> appears in the top-right corner with their name and message preview.<br><br>• <strong>Reply</strong> — opens a mini chat popup right here, no page change<br>• <strong>Dismiss</strong> — closes the toast<br><br>This works on every admin page.',
+    attachTo: { element: '#jeff-toast', on: 'left' },
+    when: {
+      show: function() {
+        var t = document.getElementById('jeff-toast');
+        if (!t) { tour.next(); return; }
+        t.style.setProperty('display', 'block', 'important');
+      },
+      hide: function() {
+        var t = document.getElementById('jeff-toast');
+        if (t) t.style.setProperty('display', 'none', 'important');
+      }
+    },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'members-link',
+    title: 'Managing Members',
+    text: 'The <strong>Members</strong> page lists every subscriber — their email, join date, subscription status, and Stripe customer ID.<br><br>From there you can open a direct message conversation with any member in one click.',
+    attachTo: { element: 'a[href="/admin/members"]', on: 'bottom' },
+    when: { show: function() { if (!has('a[href="/admin/members"]')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'app-content-link',
+    title: 'App Content',
+    text: 'The <strong>App Content</strong> page controls what videos appear in the Train4Life iOS app.<br><br>Add videos by pasting a VHX video ID, drag to reorder, and remove videos with one click. Changes sync to the app immediately.',
+    attachTo: { element: 'a[href="/admin/app-content"]', on: 'bottom' },
+    when: { show: function() { if (!has('a[href="/admin/app-content"]')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'resources-link',
+    title: 'Resources & Guides',
+    text: 'The <strong>Resources</strong> page has the full admin PDF guide, a walkthrough script for recording your onboarding video, and this interactive tour.<br><br>Bookmark it — everything you need is there.',
+    attachTo: { element: 'a[href="/admin/resources"]', on: 'bottom' },
+    when: { show: function() { if (!has('a[href="/admin/resources"]')) tour.next(); } },
+    buttons: [p('← Back', tour.back.bind(tour), 'secondary'), p('Next →', tour.next.bind(tour), 'primary')]
+  });
+
+  tour.addStep({
+    id: 'done',
+    title: '✅ Tour Complete',
+    text: 'You\'ve seen the full admin panel overview.<br><br>For deep detail on every feature, download the <strong><a href="/admin/resources">Admin PDF Guide</a></strong> from the Resources page.<br><br>Run this tour again any time with the <strong>▶ Tour</strong> button in the nav.',
+    buttons: [p('Close', tour.next.bind(tour), 'primary')]
+  });
+
+  // Hide jeff-toast when tour ends/cancels
+  tour.on('cancel', function() {
+    var t = document.getElementById('jeff-toast');
+    if (t) t.style.setProperty('display', 'none', 'important');
+  });
+  tour.on('complete', function() {
+    var t = document.getElementById('jeff-toast');
+    if (t) t.style.setProperty('display', 'none', 'important');
+  });
+
+  tour.start();
+}
+window.startAdminTour = startAdminTour;
 </script>
 
 </body>

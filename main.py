@@ -2871,6 +2871,12 @@ def admin_guide():
     return render_template('admin_guide.html')
 
 
+@app.route('/admin/resources')
+@_admin_required
+def admin_resources():
+    return render_template('admin_resources.html')
+
+
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('is_admin', None)
