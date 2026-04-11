@@ -262,12 +262,12 @@
 <audio id="admin-alert-audio" src="/static/sounds/message.mp3" preload="auto"></audio>
 
 <!-- message toast -->
-<div id="admin-msg-toast">
-  <div id="admin-msg-toast-text">
-    <div id="admin-msg-toast-sender">Member</div>
-    <div id="admin-msg-toast-body"></div>
+<div id="admin-msg-toast" style="display:none;position:fixed;bottom:24px;right:24px;z-index:99999;background:#1a1a1a !important;color:white;border:2px solid #a78bfa;border-radius:12px;padding:16px 20px;min-width:320px;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.5);cursor:pointer;align-items:center;gap:14px;">
+  <div id="admin-msg-toast-text" style="flex:1;min-width:0;">
+    <div id="admin-msg-toast-sender" style="color:#CC0000;font-weight:bold;font-size:16px;display:block;margin-bottom:6px;">Member</div>
+    <div id="admin-msg-toast-body" style="color:white;font-size:15px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
   </div>
-  <button id="admin-msg-toast-x" title="Dismiss">✕</button>
+  <button id="admin-msg-toast-x" title="Dismiss" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:18px;cursor:pointer;padding:6px 12px;border-radius:8px;flex-shrink:0;line-height:1;">✕</button>
 </div>
 
 <!-- mini chat popup -->
