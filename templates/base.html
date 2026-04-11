@@ -1889,6 +1889,7 @@
 
     // ── New message from any member DM ────────────────────────────────────
     socket.on('admin_new_message', function(msg) {
+      console.log('[admin_new_message] raw msg:', JSON.stringify(msg).substring(0, 200));
       if (window._adminChatHandlesMsg) return;  // admin_chat.html already shows it
       var sender = msg.display_name || msg.sender_name || msg.sender_id || 'Member';
       if (sender.indexOf('@') !== -1) {
@@ -1896,7 +1897,10 @@
                        .replace(/\b\w/g, function(c){ return c.toUpperCase(); });
       }
       var preview = (msg.content || '').substring(0, 80);
-      var email   = (msg.chat_id || '').replace(/^dm:/, '');
+      // Extract email from chat_id (dm:email) OR fall back to sender fields
+      var email = (msg.chat_id || '').replace(/^dm:/, '')
+                  || msg.sender_email || msg.sender_id || '';
+      console.log('[admin_new_message] resolved email:', email);
       // If mini chat is already open for this person, append inline
       if (_miniEmail === email) { _appendMiniMsgBase(msg.content, false); return; }
       playAlert();
