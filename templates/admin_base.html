@@ -209,16 +209,16 @@
   @keyframes gchatIn {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   #admin-msg-toast{
     display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
-    z-index:99998;background:#18181b;border:1px solid rgba(255,255,255,0.12);
-    border-radius:14px;padding:0.75rem 1rem 0.75rem 1.1rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
-    min-width:280px;max-width:88vw;align-items:center;gap:10px;
+    z-index:99998;background:#0f0f0f;border:2px solid rgba(167,139,250,0.5);
+    border-radius:16px;padding:1rem 1.1rem 1rem 1.3rem;box-shadow:0 10px 40px rgba(0,0,0,0.85);
+    min-width:320px;max-width:92vw;align-items:center;gap:14px;
   }
   #admin-msg-toast.showing{animation:gmsgIn 0.2s ease;}
   #admin-msg-toast-text{flex:1;cursor:pointer;min-width:0;}
-  #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.2rem;}
-  #admin-msg-toast-body  {font-size:0.88rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  #admin-msg-toast-x{background:none;border:none;color:#71717a;font-size:1rem;cursor:pointer;padding:4px;flex-shrink:0;line-height:1;}
-  #admin-msg-toast-x:hover{color:#fff;}
+  #admin-msg-toast-sender{font-size:1rem;font-weight:900;color:#a78bfa;margin-bottom:0.3rem;letter-spacing:0.01em;}
+  #admin-msg-toast-body  {font-size:1rem;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #admin-msg-toast-x{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:1.2rem;cursor:pointer;padding:6px 10px;flex-shrink:0;line-height:1;border-radius:8px;}
+  #admin-msg-toast-x:hover{background:rgba(255,255,255,0.2);}
   /* ── Mini chat popup ─────────────────────────────────────────── */
   #admin-mini-chat{
     display:none;position:fixed;bottom:24px;right:24px;z-index:99999;
@@ -256,6 +256,9 @@
   }
   #admin-mini-chat-send:hover{filter:brightness(1.12);}
 </style>
+
+<!-- pre-loaded alert sound -->
+<audio id="admin-alert-audio" src="/static/sounds/message.mp3" preload="auto"></audio>
 
 <!-- message toast -->
 <div id="admin-msg-toast">
@@ -353,26 +356,12 @@ window._gblBuildPC = function(socket, peerSid) {
 (function() {
 
   // ── Audio ──────────────────────────────────────────────────────────────────
-  // Create element immediately so it's ready; unlock on first any interaction.
-  var _audio   = new Audio('/static/sounds/message.mp3');
-  var _audioOk = false;
-  function _unlockAudio() {
-    if (_audioOk) return;
-    _audio.volume = 0;
-    var p = _audio.play();
-    if (p && p.then) {
-      p.then(function() {
-        _audio.pause(); _audio.currentTime = 0; _audio.volume = 1; _audioOk = true;
-      }).catch(function(){});
-    }
-  }
-  // Catch both click and keydown so any interaction unlocks it
-  document.addEventListener('click',   _unlockAudio, { once: true });
-  document.addEventListener('keydown', _unlockAudio, { once: true });
+  // Use the pre-loaded <audio> tag — simpler and more reliable than new Audio()
+  var _audioEl = document.getElementById('admin-alert-audio');
 
   function playAlert() {
-    if (!_audioOk) { _unlockAudio(); return; }
-    try { _audio.currentTime = 0; _audio.play().catch(function(){}); } catch(e) {}
+    if (!_audioEl) return;
+    try { _audioEl.currentTime = 0; _audioEl.play().catch(function(){}); } catch(e) {}
   }
 
   // ── Browser notification permission ───────────────────────────────────────
@@ -387,8 +376,7 @@ window._gblBuildPC = function(socket, peerSid) {
     } catch(e) {}
   }
 
-  // ── Message toast (15s, X dismiss, click → mini chat) ─────────────────────
-  var _msgTimer  = null;
+  // ── Message toast (no auto-dismiss — stays until X clicked) ──────────────
   var _msgEmail  = null;
   var _msgSender = null;
   var msgToast   = document.getElementById('admin-msg-toast');
@@ -399,17 +387,13 @@ window._gblBuildPC = function(socket, peerSid) {
     document.getElementById('admin-msg-toast-sender').textContent = senderName;
     document.getElementById('admin-msg-toast-body').textContent   = preview;
     msgToast.classList.remove('showing');
-    // Force reflow so animation replays on repeated toasts
-    void msgToast.offsetWidth;
+    void msgToast.offsetWidth; // force reflow so animation replays
     msgToast.classList.add('showing');
     msgToast.style.display = 'flex';
-    clearTimeout(_msgTimer);
-    _msgTimer = setTimeout(dismissMsgToast, 15000);
   }
   function dismissMsgToast() {
     msgToast.classList.remove('showing');
     msgToast.style.display = 'none';
-    clearTimeout(_msgTimer);
   }
 
   // Click on text → open mini chat
