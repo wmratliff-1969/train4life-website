@@ -211,9 +211,9 @@
     display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);
     z-index:99998;background:#18181b;border:1px solid rgba(255,255,255,0.12);
     border-radius:14px;padding:0.75rem 1rem 0.75rem 1.1rem;box-shadow:0 8px 28px rgba(0,0,0,0.6);
-    min-width:280px;max-width:88vw;animation:gmsgIn 0.2s ease;
-    display:none;align-items:center;gap:10px;
+    min-width:280px;max-width:88vw;align-items:center;gap:10px;
   }
+  #admin-msg-toast.showing{animation:gmsgIn 0.2s ease;}
   #admin-msg-toast-text{flex:1;cursor:pointer;min-width:0;}
   #admin-msg-toast-sender{font-size:0.8rem;font-weight:800;color:#a78bfa;margin-bottom:0.2rem;}
   #admin-msg-toast-body  {font-size:0.88rem;color:#e4e4e7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -398,11 +398,16 @@ window._gblBuildPC = function(socket, peerSid) {
     _msgSender = senderName;
     document.getElementById('admin-msg-toast-sender').textContent = senderName;
     document.getElementById('admin-msg-toast-body').textContent   = preview;
+    msgToast.classList.remove('showing');
+    // Force reflow so animation replays on repeated toasts
+    void msgToast.offsetWidth;
+    msgToast.classList.add('showing');
     msgToast.style.display = 'flex';
     clearTimeout(_msgTimer);
     _msgTimer = setTimeout(dismissMsgToast, 15000);
   }
   function dismissMsgToast() {
+    msgToast.classList.remove('showing');
     msgToast.style.display = 'none';
     clearTimeout(_msgTimer);
   }
@@ -497,9 +502,17 @@ window._gblBuildPC = function(socket, peerSid) {
     }
   }
 
+  // Expose key functions globally for console debugging
+  window.openMiniChat = openMiniChat;
+  window.playAlert    = playAlert;
+
   // ── Socket ────────────────────────────────────────────────────────────────
   var adminPendingFrom = null, adminPendingChatId = null;
-  var socket = io();
+  var socket;
+  try { socket = io(); } catch(e) {
+    console.warn('[admin notify] socket.io not available:', e.message);
+    return; // exit IIFE gracefully — no socket events possible
+  }
 
   socket.on('connect', function() {
     socket.emit('join_call_room',          { chat_id: 'admin' });
