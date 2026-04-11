@@ -746,7 +746,8 @@ def _send_onesignal_push_msg(heading, body_text, segment='All', filters=None):
 
 def _send_apns_push(device_token, title, body, extra_data=None, notif_type='message'):
     """Send a push notification directly via APNs HTTP/2 using .p8 JWT auth.
-    Requires APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_KEY env vars.
+    Reads APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_KEY from env vars first;
+    falls back to the apns_config Redis key if any env var is missing.
     Set APNS_SANDBOX=true for Xcode development builds (uses sandbox endpoint).
     """
     key_id    = os.environ.get('APNS_KEY_ID', '').strip()
@@ -756,7 +757,23 @@ def _send_apns_push(device_token, title, body, extra_data=None, notif_type='mess
     key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
     sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
 
-    print(f'[APNs] config: key_id={key_id!r} team_id={team_id!r} bundle_id={bundle_id!r} sandbox={sandbox} key_pem_len={len(key_pem)} token_len={len(device_token)}')
+    config_source = 'env'
+    if not all([key_id, team_id, bundle_id, key_pem]):
+        # Env vars missing — try Redis fallback (seeded at startup)
+        redis_cfg = _redis_get_apns_config()
+        if redis_cfg:
+            key_id    = key_id    or redis_cfg.get('key_id', '')
+            team_id   = team_id   or redis_cfg.get('team_id', '')
+            bundle_id = bundle_id or redis_cfg.get('bundle_id', '')
+            key_pem   = key_pem   or redis_cfg.get('key_pem', '')
+            if not os.environ.get('APNS_SANDBOX', ''):
+                sandbox = redis_cfg.get('sandbox', False)
+            config_source = 'redis'
+            print('[APNs] ⚠️  env vars incomplete — loaded config from Redis', flush=True)
+        else:
+            print('[APNs] ⚠️  env vars incomplete and Redis has no apns_config', flush=True)
+
+    print(f'[APNs] config (source={config_source}): key_id={key_id!r} team_id={team_id!r} bundle_id={bundle_id!r} sandbox={sandbox} key_pem_len={len(key_pem)} token_len={len(device_token)}')
 
     if not all([key_id, team_id, bundle_id, key_pem, device_token]):
         missing = [k for k, v in [('key_id', key_id), ('team_id', team_id), ('bundle_id', bundle_id), ('key_pem', key_pem), ('device_token', device_token)] if not v]
@@ -1758,6 +1775,69 @@ def _redis_get_tokens(email):
     except Exception as e:
         print(f'[REDIS] get token error for {email}: {e}', flush=True)
         return {}
+
+_REDIS_APNS_KEY = 'apns_config'
+
+def _redis_set_apns_config(cfg: dict):
+    """Persist APNS config dict to Redis as a JSON string. Safe for PEM content."""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        print('[REDIS] apns_config NOT saved — Upstash not configured', flush=True)
+        return False
+    try:
+        encoded = json.dumps(cfg, separators=(',', ':'))
+        r = _http.post(
+            f'{_UPSTASH_URL}/set/{_REDIS_APNS_KEY}',
+            headers={'Authorization': f'Bearer {_UPSTASH_TOKEN}', 'Content-Type': 'text/plain'},
+            data=encoded,
+            timeout=5,
+        )
+        print(f'[REDIS] apns_config saved → {r.status_code}', flush=True)
+        return r.status_code == 200
+    except Exception as e:
+        print(f'[REDIS] apns_config save error: {e}', flush=True)
+        return False
+
+
+def _redis_get_apns_config() -> dict:
+    """Load APNS config from Redis. Returns {} if not found or Upstash not configured."""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        return {}
+    try:
+        r = _http.get(
+            f'{_UPSTASH_URL}/get/{_REDIS_APNS_KEY}',
+            headers={'Authorization': f'Bearer {_UPSTASH_TOKEN}'},
+            timeout=3,
+        )
+        result = r.json().get('result')
+        if result:
+            return json.loads(result)
+    except Exception as e:
+        print(f'[REDIS] apns_config load error: {e}', flush=True)
+    return {}
+
+
+def _seed_apns_to_redis():
+    """Seed APNS config from env vars → Redis on every startup.
+    Env vars are authoritative when present; Redis preserves them across deploys
+    even if the vars are later removed from Render's dashboard."""
+    key_id    = os.environ.get('APNS_KEY_ID', '').strip()
+    team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
+    bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
+    key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
+    sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
+
+    if not all([key_id, team_id, bundle_id, key_pem]):
+        print('[STARTUP] ⚠️  APNS env vars incomplete — skipping Redis seed '
+              '(will try to load from Redis instead)', flush=True)
+        return
+
+    cfg = {'key_id': key_id, 'team_id': team_id, 'bundle_id': bundle_id,
+           'key_pem': key_pem, 'sandbox': sandbox}
+    ok = _redis_set_apns_config(cfg)
+    print(f'[STARTUP] APNS config seeded to Redis: {"✅" if ok else "❌"}', flush=True)
+
+_seed_apns_to_redis()
+
 
 def _load_live_settings():
     """Return current live settings. In-memory cache → Upstash → file seed."""
@@ -3520,20 +3600,30 @@ def api_register_device():
 
 @app.route('/api/test-push', methods=['GET', 'POST'])
 def api_test_push():
-    """Send a synchronous test APNs push to the currently logged-in user.
-    Checks Redis and users.json for tokens, runs APNs inline, and returns the
-    full response (status, reason, apns-id) so failures are immediately visible."""
-    email, _ = _msg_auth()
-    if not email:
+    """Send a synchronous test APNs push.
+    - Logged-in users push to themselves.
+    - Admins may pass ?email=mark@train4life.life to test any user's push.
+    Returns full APNs response including status/reason/apns-id."""
+    caller_email, is_admin = _msg_auth()
+    if not caller_email:
         return jsonify({'ok': False, 'error': 'not logged in'}), 401
 
+    # Admin can target any user via ?email=; everyone else is locked to self
+    target_email_param = request.args.get('email') or (
+        request.json.get('email') if request.is_json else None
+    )
+    if target_email_param and is_admin:
+        target_email = target_email_param.strip().lower()
+    else:
+        target_email = caller_email
+
     # ── Redis token check ───────────────────────────────────────────────────
-    redis_tokens     = _redis_get_tokens(email)
+    redis_tokens     = _redis_get_tokens(target_email)
     apns_token_redis = (redis_tokens.get('apns') or '').strip()
     player_id_redis  = (redis_tokens.get('onesignal') or '').strip()
 
     # ── users.json fallback ─────────────────────────────────────────────────
-    user            = _load_users().get(email, {})
+    user            = _load_users().get(target_email, {})
     apns_token_json = user.get('apns_device_token', '').strip()
     player_id_json  = user.get('onesignal_player_id', '').strip()
 
@@ -3545,7 +3635,7 @@ def api_test_push():
     if not apns_token and not player_id:
         return jsonify({
             'ok': False,
-            'error': f'no push token registered for {email}',
+            'error': f'no push token registered for {target_email}',
             'hint': 'open the app and wait for DeviceRegistration to run',
             'redis_raw': redis_tokens,
         }), 400
@@ -3553,20 +3643,74 @@ def api_test_push():
     # ── Synchronous APNs push (captures full response) ──────────────────────
     apns_result = None
     if apns_token:
-        print(f'[TEST-PUSH] synchronous APNs to {email} source={token_source} token={apns_token[:20]}...')
+        print(f'[TEST-PUSH] synchronous APNs to {target_email} source={token_source} token={apns_token[:20]}...')
         apns_result = _send_apns_push(
-            apns_token, '🔔 Test Push', f'APNs working for {email}!',
+            apns_token, '🔔 Test Push', f'APNs working for {target_email}!',
             {'data': {'type': 'message'}},
         )
 
     return jsonify({
         'ok': True,
-        'email': email,
+        'caller':              caller_email,
+        'target_email':        target_email,
         'token_source':        token_source,
         'apns_token_redis':    apns_token_redis[:20] + '...' if apns_token_redis else None,
         'apns_token_json':     apns_token_json[:20]  + '...' if apns_token_json  else None,
         'player_id':           player_id[:20]        + '...' if player_id        else None,
         'apns_result':         apns_result,
+    })
+
+
+@app.route('/api/admin/seed-apns', methods=['GET', 'POST'])
+def api_admin_seed_apns():
+    """Seed APNS config from env vars into Redis. Admin-only (session or ?key=ADMIN_API_KEY).
+    Safe to call repeatedly — existing Redis value is overwritten with current env vars.
+    If env vars are absent, returns whatever is currently stored in Redis."""
+    _, is_admin = _msg_auth()
+    api_key = request.args.get('key') or (
+        request.json.get('key') if request.is_json else None
+    )
+    if not is_admin and api_key != ADMIN_API_KEY:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 403
+
+    key_id    = os.environ.get('APNS_KEY_ID', '').strip()
+    team_id   = os.environ.get('APNS_TEAM_ID', '').strip()
+    bundle_id = os.environ.get('APNS_BUNDLE_ID', '').strip()
+    key_pem   = os.environ.get('APNS_KEY', '').replace('\\n', '\n').strip()
+    sandbox   = os.environ.get('APNS_SANDBOX', '').lower() in ('1', 'true', 'yes')
+
+    env_complete = all([key_id, team_id, bundle_id, key_pem])
+    seeded = False
+    if env_complete:
+        cfg = {'key_id': key_id, 'team_id': team_id, 'bundle_id': bundle_id,
+               'key_pem': key_pem, 'sandbox': sandbox}
+        seeded = _redis_set_apns_config(cfg)
+
+    # Always show what is currently in Redis (after potential write)
+    redis_cfg = _redis_get_apns_config()
+
+    def mask(v):
+        return (v[:4] + '***' + v[-4:]) if len(v) > 8 else ('***' if v else None)
+
+    return jsonify({
+        'ok': True,
+        'env_complete':    env_complete,
+        'seeded_to_redis': seeded,
+        'redis_has_config': bool(redis_cfg),
+        'env': {
+            'APNS_KEY_ID':    mask(key_id),
+            'APNS_TEAM_ID':   mask(team_id),
+            'APNS_BUNDLE_ID': bundle_id or None,
+            'APNS_KEY':       f'set ({len(key_pem)} chars)' if key_pem else None,
+            'APNS_SANDBOX':   sandbox,
+        },
+        'redis': {
+            'key_id':    mask(redis_cfg.get('key_id', '')),
+            'team_id':   mask(redis_cfg.get('team_id', '')),
+            'bundle_id': redis_cfg.get('bundle_id') or None,
+            'key_pem':   f'set ({len(redis_cfg.get("key_pem",""))} chars)' if redis_cfg.get('key_pem') else None,
+            'sandbox':   redis_cfg.get('sandbox'),
+        } if redis_cfg else None,
     })
 
 
