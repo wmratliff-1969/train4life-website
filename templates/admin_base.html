@@ -485,8 +485,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('jeff-toast').style.setProperty('display', 'none', 'important');
   });
   if (replyBtn) replyBtn.addEventListener('click', function() {
+    console.log('[toast-reply] clicked — _toastEmail:', window._toastEmail, '_toastName:', window._toastName);
     document.getElementById('jeff-toast').style.setProperty('display', 'none', 'important');
     if (window._toastEmail) window.openMiniChat(window._toastEmail, window._toastName || '');
+    else console.error('[toast-reply] _toastEmail is null/empty — openMiniChat not called');
   });
 
   var cb = document.getElementById('admin-mini-chat-close');

@@ -1980,9 +1980,11 @@
 <script>
 window._toastEmail = null;
 window.showAdminToast = function(memberEmail, messageText) {
+  console.log('[toast] showAdminToast called — email:', memberEmail, 'msg:', messageText);
   var toast = document.getElementById('adminMessageToast');
   var toastText = document.getElementById('adminToastText');
-  window._toastEmail = memberEmail || null;
+  window._toastEmail = memberEmail;  // set unconditionally — no || null
+  console.log('[toast] _toastEmail set to:', window._toastEmail);
   if (toastText) toastText.textContent = messageText || ('New message from ' + memberEmail);
   if (toast) toast.style.display = 'block';
 };
@@ -1992,6 +1994,7 @@ window.dismissAdminToast = function() {
   window._toastEmail = null;
 };
 window.replyToAdminToast = function() {
+  console.log('[toast] replyToAdminToast — _toastEmail:', window._toastEmail);
   if (!window._toastEmail) return;
   window.location.href = '/admin/messages/dm/' + encodeURIComponent(window._toastEmail);
 };
